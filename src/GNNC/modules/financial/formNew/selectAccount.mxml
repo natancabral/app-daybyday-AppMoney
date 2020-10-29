@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  
+		  width="400" height="200" 
+		  creationComplete="{__start()}" 
+		  
+		  xmlns:stage="GNNC.elements.stage.*" 
+		  xmlns:component="GNNC.elements.component.*" 
+		  xmlns:gnncDateField4="GNNC.UI.gnncDateField4.*" xmlns:select="GNNC.elements.component.select.*" xmlns:elements="GNNC.UI.elements.*"
+		  >
+	<fx:Declarations>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import GNNC.UI.gnncAlert.gnncAlert;
+			import GNNC.UI.gnncNotification.gnncNotification;
+			import GNNC.UI.gnncPopUp.gnncPopUp;
+			import GNNC.data.data.gnncData;
+			import GNNC.data.data.gnncDataArrayCollection;
+			import GNNC.data.globals.gnncGlobalStatic;
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.keyboard.gnncKeyboard;
+			
+			[Bindable] private var _gnncGlobal:gnncGlobalStatic 	= new gnncGlobalStatic(true);
+			
+			public var _change:Boolean 					= false;
+			
+			public var _AllAccounts:Boolean 			= false;
+			public var _idAccount:int 					= 0;
+			public var _nameAccount:String 				= '';
+			public var _bank:String 					= '';
+
+			private var _gnncPopUp:gnncPopUp 			= new gnncPopUp();
+			
+			private function __start():void
+			{
+				//__KEY_FOCUS_LIST();
+				//__financialDocumentLastNumber();
+				
+				this.addEventListener(KeyboardEvent.KEY_UP,
+					function(event:KeyboardEvent):void
+					{
+						if(gnncKeyboard.__ENTER(event))
+						{
+							focusManager.getNextFocusManagerComponent().setFocus();
+							focusManager.getNextFocusManagerComponent().drawFocus(true);
+							
+							focusManager.showFocus();
+							focusManager.getFocus();
+							focusManager.activate();
+						}
+						if(gnncKeyboard.__CONTROL_ENTER(event)) __select();
+					}
+				);
+				
+				callLater(__firstInput);
+			}
+			
+			public function __firstInput():void 
+			{ 
+				if(_idAccount)
+					FINANCIAL_ACCOUNT_.selectedIndex = new gnncDataArrayCollection().__getIndex(_gnncGlobal._FINANCIAL_ACCOUNT.DATA_ARR,'ID',_idAccount);
+				FINANCIAL_ACCOUNT_.setFocus();
+			}
+
+			private function __close():void
+			{
+				new gnncPopUp().__close(this);
+			}
+
+
+			private function __selectAll():void
+			{
+				_change = true;
+
+				_AllAccounts	= true;
+				_idAccount 	 	= 0;
+				_nameAccount 	= 'Todas as Contas';
+				_bank			= '';
+				new gnncPopUp().__close(this);
+			}
+			
+			private function __select(showMessage_:Boolean=true):void
+			{				
+				if(FINANCIAL_ACCOUNT_.selectedIndex > -1){
+
+					_change = true;
+					_AllAccounts	= false;
+					_idAccount 	 	= FINANCIAL_ACCOUNT_.selectedItem.ID;
+					_nameAccount 	= FINANCIAL_ACCOUNT_.selectedItem.NAME;
+					_bank			= FINANCIAL_ACCOUNT_.selectedItem.BANK;
+
+					new gnncPopUp().__close(this);
+					new gnncNotification().__show(gnncData.__firstLetterUpperCase(_nameAccount),'Você irá trabalhar somente com este banco');
+
+				}else{
+					if(showMessage_)
+						new gnncAlert().__alert('Selecione uma conta.');
+				}
+			}
+
+		]]>
+	</fx:Script>
+	
+	<elements:elementStageBoxPopUp />
+	<elements:elementLabelFont id="titlePopUp_" text="SELECIONE UMA CONTA FINANCEIRA" fontSize="9" fontWeight="normal" left="1" top="6" right="1" textAlign="center" color="0x555555"/>
+	
+	<s:HGroup left="20" right="20" top="20" height="30" verticalAlign="middle" paddingRight="5">
+		<s:TabBar dataProvider="{panelCenter_}" height="30" focusEnabled="false" />
+		<s:Rect width="100%"/>
+	</s:HGroup>
+
+	<mx:ViewStack id="panelCenter_" left="20" right="20" top="55" bottom="52">
+		<s:NavigatorContent label="BÁSICO" width="100%" height="100%">
+			<s:layout>
+				<s:VerticalLayout gap="1" paddingBottom="20" paddingLeft="20" paddingRight="20" paddingTop="20" />
+			</s:layout>
+			<s:DropDownList id="FINANCIAL_ACCOUNT_" dataProvider="{_gnncGlobal._FINANCIAL_ACCOUNT.DATA_ARR}" width="100%" height="30" prompt="Selecione..." 
+							labelField="NAME" color="0x111111"
+							itemRenderer="GNNC.modules.financial.itemRender.itemRender_financialAccount_forList"
+							labelFunction="gnncData.labelFunctionFirstLetter"
+							change="{__select()}"
+							/>
+			<elements:elementHLine height="1" alpha=".5" />
+			<s:Button label="Todas as Contas" width="100%" height="30" icon="{gnncEmbedBlackWhite.bw_all_16}" click="{__selectAll()}" fontWeight="bold" />
+		</s:NavigatorContent>
+	</mx:ViewStack>
+
+	<s:HGroup left="1" right="1" bottom="1" height="34" gap="2" paddingLeft="5" paddingRight="5" verticalAlign="middle">
+		<s:Rect width="100%" />
+		<s:Button label="Selecionar" height="25" icon="{gnncEmbedBlackWhite.bw_ok_16}" click="{__select()}" fontWeight="bold" enabled="{FINANCIAL_ACCOUNT_.selectedIndex>-1?true:false}"/>
+		<s:Button icon="{gnncEmbedBlackWhite.app_close_16_clean}" label="Fechar" click="{__close()}" height="25" skinClass="GNNC.skin.button.skin_buttonLink" />	
+	</s:HGroup>
+
+	<s:Button top="4" right="4" click="{__close()}" width="10" height="10" tabFocusEnabled="false" toolTip="Fechar" />
+
+</s:Module>

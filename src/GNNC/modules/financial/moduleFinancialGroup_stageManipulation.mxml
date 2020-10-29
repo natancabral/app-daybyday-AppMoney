@@ -1,0 +1,1083 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%"
+		  
+		  xmlns:stage="GNNC.elements.stage.*" 
+		  xmlns:component="GNNC.elements.component.*"
+
+		  creationComplete="{__start()}" 
+		  
+		  xmlns:select="GNNC.elements.component.select.*" xmlns:elements="GNNC.UI.elements.*" 
+
+		  >
+
+	<fx:Script>
+		<![CDATA[
+			import GNNC.UI.gnncAlert.gnncAlert;
+			import GNNC.data.conn.gnncAMFPhp;
+			import GNNC.data.data.gnncDataNumber;
+			import GNNC.data.file.gnncFilePdf;
+			import GNNC.data.globals.gnncGlobalArrays;
+			import GNNC.data.globals.gnncGlobalLog;
+			import GNNC.gnncEmbedBlackWhite;
+			
+			import mx.charts.chartClasses.IAxis;
+			import mx.collections.ArrayCollection;
+			
+			//todo o saldo do mês
+			private var monthSafeIn:Number = 0;
+			private var monthSafeOut:Number = 0;
+			private var monthSafeTotal:Number = 0;
+
+			//todo o saldo da lista
+			private var safeIn:Number = 0;
+			private var safeOut:Number = 0;
+			private var safeTotal:Number = 0;
+			
+			//todo o saldo da mudança
+			private var safeInDisc:Number = 0;
+			private var safeOutDisc:Number = 0;
+			private var safeTotalDisc:Number = 0;
+
+			//private var monthSafeInAmf:gnncAMFPhp  = new gnncAMFPhp();
+			//private var monthSafeOutAmf:gnncAMFPhp = new gnncAMFPhp();
+
+			private var groupSafeInAmf:gnncAMFPhp  = new gnncAMFPhp();
+			private var groupSafeOutAmf:gnncAMFPhp = new gnncAMFPhp();
+
+			private function __start():void
+			{
+				ID_DEPARTAMENT_._CHANGE_EVENT = changeDepartament;
+				//set
+				FINANCIAL_BALANCE_START_.selectedIndex = new Date().month;
+				FINANCIAL_BALANCE_YEAR_.value = new Date().fullYear;
+			}
+
+			private function changeDepartament(e:Event):void
+			{
+				groupSafeInAmf.DATA_ARR  = new ArrayCollection();
+				groupSafeOutAmf.DATA_ARR = new ArrayCollection();
+				
+				chartInList.enabled       = true;
+				chartInList.dataProvider  = groupSafeInAmf.DATA_ARR;
+				chartIn.dataProvider      = groupSafeInAmf.DATA_ARR;
+				chartInAxias.dataProvider = groupSafeInAmf.DATA_ARR;
+				chartInPie.dataProvider   = groupSafeInAmf.DATA_ARR;
+
+				chartOutList.enabled       = true;
+				chartOutList.dataProvider  = groupSafeOutAmf.DATA_ARR;
+				chartOut.dataProvider      = groupSafeOutAmf.DATA_ARR;
+				chartOutAxias.dataProvider = groupSafeOutAmf.DATA_ARR;
+				chartOutPie.dataProvider   = groupSafeOutAmf.DATA_ARR;
+			}
+
+			private function enabledBar():void
+			{
+				if(chartInList.enabled == true && chartOutList.enabled == true)
+					barButtons_.enabled = true;
+				else
+					barButtons_.enabled = false;
+			}
+
+			private function __getGroupTotal():void
+			{
+				monthSafeIn = 0;
+				monthSafeOut = 0;
+				monthSafeTotal = 0;
+				
+				//todo o saldo da lista
+				safeIn = 0;
+				safeOut = 0;
+				safeTotal = 0;
+				
+				//todo o saldo da mudança
+				safeInDisc = 0;
+				safeOutDisc = 0;
+				safeTotalDisc = 0;
+
+				callLater(__getAmf,[true]);
+				callLater(__getAmf,[false]);
+			}
+			
+			private function __getGroup(safeOutv:Boolean=true):String
+			{
+				var y:String     = String(FINANCIAL_BALANCE_YEAR_.value);
+				var m:String     = String(FINANCIAL_BALANCE_START_.selectedItem.data);
+				var l:String     = String(FINANCIAL_LAST_.value);
+				var idDep:String = ID_DEPARTAMENT_.value > 0 ? " AND f.ID_DEPARTAMENT = '"+ID_DEPARTAMENT_.value+"' " : '' ;
+				
+				var inputColumn:String = SAFE_FINAL_.selected ? 'DATE_FINAL' : 'DATE_END' ; // vencimento
+				//var inputColumn:String = 'DATE_FINAL'; // pagamento
+				var inputSafe:String   = SAFE_FINAL_.selected ? ( safeOutv ? 'VALUE_OUT_PAY' : 'VALUE_IN_PAY' ) : ( safeOutv ? 'VALUE_OUT' : 'VALUE_IN' ) ;
+				
+				var month:String       = " (select round(SUM(f."+inputSafe+"),2) from dbd_financial f WHERE LEFT(f."+inputColumn+",7) like LEFT('"+y+"-"+m+"-00',7) AND f."+inputSafe+" > 0 AND f.MIX <> 'FINANCIAL_TRANS' AND f.DATE_CANCELED < 1 "+idDep+" limit 0,1 ) as TOTAL_MONTH, ";
+				var column:String      = " coalesce((select g.NAME from dbd_group g where g.ID = f.ID_GROUP),'Sem classificação') as label, coalesce((select g.TYPE_FINANCIAL_FIX from dbd_group g where g.ID = f.ID_GROUP),'') as type, round(SUM(f."+inputSafe+"),2) as value";
+				var sql:String         = " SELECT '0.0' as percent, " + month + column + " from dbd_financial f WHERE LEFT(f."+inputColumn+",7) like LEFT('"+y+"-"+m+"-00',7) AND f."+inputSafe+" > 0 AND f.MIX <> 'FINANCIAL_TRANS' AND f.DATE_CANCELED < 1 "+idDep+" group by f.ID_GROUP ORDER BY value DESC limit 0,"+l+" ";
+				
+				return sql;
+			}
+
+			private function __getAmf(safeOutv:Boolean=true):void
+			{
+				enabledBar();
+
+				var sql:String = __getGroup(safeOutv);
+				if(safeOutv==false){
+					chartInList.enabled = false;
+					groupSafeInAmf.__clear();
+					groupSafeInAmf.__sql(sql,'','',__fResult,__fFault);
+				}else if(safeOutv==true){
+					chartOutList.enabled = false;
+					groupSafeOutAmf.__clear();
+					groupSafeOutAmf.__sql(sql,'','',__fResult,__fFault);
+				}
+
+				function __fResult(e:*=null):void
+				{
+					if(safeOutv==false)
+					{
+						chartInList.enabled       = true;
+						chartInList.dataProvider  = groupSafeInAmf.DATA_ARR;
+						chartIn.dataProvider      = groupSafeInAmf.DATA_ARR;
+						chartInAxias.dataProvider = groupSafeInAmf.DATA_ARR;
+						chartInPie.dataProvider   = groupSafeInAmf.DATA_ARR;
+					}
+					else if(safeOutv==true)
+					{
+						chartOutList.enabled       = true;
+						chartOutList.dataProvider  = groupSafeOutAmf.DATA_ARR;
+						chartOut.dataProvider      = groupSafeOutAmf.DATA_ARR;
+						chartOutAxias.dataProvider = groupSafeOutAmf.DATA_ARR;
+						chartOutPie.dataProvider   = groupSafeOutAmf.DATA_ARR;
+					}
+					else{
+						chartInList.enabled       = true;
+						chartOutList.enabled      = true;
+					}
+					
+					enabledBar();
+					
+					if(groupSafeInAmf.DATA_ROWS == 0 && groupSafeOutAmf.DATA_ROWS == 0){
+						new gnncAlert().__alert('Faltam lançamentos e informações.');
+						return;
+					}
+
+					panelSafeIn_.selectedIndex  = 0;
+					panelSafeOut_.selectedIndex = 0;
+
+					__sumGroup(safeOutv);
+
+				}
+				
+				function __fFault(e:*=null):void
+				{
+					chartInList.enabled       = true;
+					chartOutList.enabled      = true;
+					enabledBar();
+				}
+
+			}
+
+			private function __sumGroup(safeOutv:Boolean=true):void
+			{
+				var safeInList:Number = 0;
+				var safeOutList:Number = 0;
+				var safeInListDisc:Number = 0;
+				var safeOutListDisc:Number = 0;
+
+				var col:ArrayCollection = new ArrayCollection();
+				var obj:Object = new Object();
+				var len:uint = 0;
+				var i:uint = 0;
+				
+				if(safeOutv==false){
+					col = new ArrayCollection(chartInList.dataProvider.toArray());
+					len = col.length;
+					for(i=0;i<len;i++){
+						obj = col.getItemAt(i);
+						safeInList = safeInList + Number(obj.value);
+					}
+				}else if(safeOutv==true){
+					col = new ArrayCollection(chartOutList.dataProvider.toArray());
+					len = col.length;
+					for(i=0;i<len;i++){
+						obj = col.getItemAt(i);
+						safeOutList = safeOutList + Number(obj.value);
+					}
+				}
+
+				if(safeOutv==false)
+				{
+					if(groupSafeInAmf.DATA_ROWS>0)
+						monthSafeIn = groupSafeInAmf.DATA_ARR.getItemAt(0).TOTAL_MONTH;
+					safeIn = safeInList;
+				}
+				else if(safeOutv==true)
+				{
+					if(groupSafeOutAmf.DATA_ROWS>0)
+						monthSafeOut = groupSafeOutAmf.DATA_ARR.getItemAt(0).TOTAL_MONTH;
+					safeOut = safeOutList;
+				}
+				else{
+				}
+
+				callLater(__setPercent,[safeOutv]);
+			}
+
+			private function __setPercent(safeOutv:Boolean=true,empty:Boolean=false):void
+			{
+				var inpt:Object = safeOutv ? safeOutPercent_ : new Object();//safeInPercent_ ;				
+				var chrt:Object = safeOutv ? chartOutList : chartInList ;				
+
+				var itens:Vector.<Object> = new Vector.<Object>;
+				var arr:ArrayCollection   = new ArrayCollection();
+				var len:uint = 0;
+				var i:uint   = 0;
+				var idx:int  = 0;
+				var idArr:Array = new Array();
+				var obj:Object  = new Object();
+
+				arr   = new ArrayCollection(chrt.dataProvider.toArray());
+				len   = chrt.selectedItems.length;
+				itens = chrt.selectedItems;
+
+				//if(gnncDataNumber.__safeClear(inpt.text) >= 100)
+				//	inpt.text = '100,00';
+				//if(empty)
+				//	inpt.text = '0,00';
+				
+				for(i=0;i<len;i++){
+					obj = itens[i];
+					idArr.push(arr.getItemIndex(obj));
+				}
+				
+				inpt.text = gnncDataNumber.__safeClear(inpt.text)>100 ? '100,00' : inpt.text;
+				//gnncGlobalLog.__add(idArr.toString()+':idArr');
+				//arr = groupSafeOutAmf.DATA_ARR;
+
+				for(i=0;i<idArr.length;i++)
+				{
+					idx         = idArr[i];
+					obj         = arr.getItemAt(idx);
+					obj.percent = gnncDataNumber.__safeClear(inpt.text);
+					obj.value   = obj.value;
+					arr.setItemAt(obj,idx);
+				}
+
+				arr.refresh();
+
+				chrt.dataProvider  = arr;
+				//chrt.selectedIndex = idx;
+				chrt.setFocus();
+
+				if(safeOutv)
+					safeInDisc    = 0;
+				else 
+					safeOutDisc   = 0;
+
+				len = arr.length;
+
+				for(i=0;i<len;i++){
+					obj = arr.getItemAt(i);
+					if(Number(obj.percent)>0){
+
+						if(safeOutv) //insere alteracao para a receita. TIRANDO DA DESPESA
+							safeInDisc    = safeInDisc  + ((obj.percent/100)*Number(obj.value));
+						else //insere alteracao para a receita. TIRANDO DA RECEITA
+							safeOutDisc   = safeOutDisc + ((obj.percent/100)*Number(obj.value));
+						
+						//safeInDisc    = safeInDisc    + Number(obj.value);
+						//safeOutDisc   = safeOutDisc   + Number(obj.value);
+						//safeTotalDisc = safeTotalDisc + Number(obj.value);
+					}
+				}
+				
+				callLater(__setBar);
+				//callLater(__sumGroup,[false]);
+				//callLater(__sumGroup,[true]);
+				
+				return;
+
+				for(i=0;i<len;i++)
+				{
+					obj = arr.getItemAt(i);
+					obj.percent;
+					obj.value;
+					//obj = itens[i];
+					//idx = arr.getItemIndex(obj);
+					//chartOutList.dataProvider = arr;
+					//chartOutList.dataProvider = arr;
+					//= safeOutPercent_.value;
+					//arr.setItemAt(obj,idx);
+				}
+				
+				__setBar();
+
+				return;
+				
+				itens = chartOutList.selectedItems;
+				arr   = new ArrayCollection(chartOutList.dataProvider.toArray());
+				
+				if(itens.length<1)
+					return;
+				
+				itens = chartOutList.selectedItems;
+				for(i=0;i<len;i++){
+					obj = new Object();
+					obj = itens[i];
+					idx = arr.getItemIndex(obj);
+					obj.percent = safeOutPercent_.text;
+					arr.setItemAt(obj,idx);
+				}
+				chartOutList.dataProvider = arr;
+				
+				__setBar();
+
+			}
+
+			private function __setBar():void
+			{
+				monthSafeTotal = monthSafeIn - monthSafeOut;
+				
+				safeIn    = safeIn  - safeOutDisc;
+				safeOut   = safeOut - safeInDisc;
+				safeTotal = safeIn  - safeOut;
+				safeTotalDisc = safeInDisc + safeOutDisc;
+				
+				//----------------------------------------
+				
+				monthSafeIn_.text          = gnncDataNumber.__safeReal(monthSafeIn);
+				monthSafeOut_.text         = gnncDataNumber.__safeReal(monthSafeOut);
+				monthSafeTotal_.text       = gnncDataNumber.__safeReal(monthSafeTotal);
+				
+				chartInLabelList.text      = gnncDataNumber.__safeReal(safeIn);
+				chartOutLabelList.text     = gnncDataNumber.__safeReal(safeOut);
+				chartTotalLabelList.text   = gnncDataNumber.__safeReal(safeTotal);
+				
+				monthSafeInDiscount_.text  = gnncDataNumber.__safeReal(safeInDisc);
+				monthSafeOutDiscount_.text = gnncDataNumber.__safeReal(safeOutDisc);
+				
+				monthSafePercentDiscount_.text = gnncDataNumber.__safeClear(((safeTotalDisc/ (safeIn+safeOut))*100),1) + '%';
+				chartPercentIn.text            = gnncDataNumber.__safeClear(((safeIn /       (safeIn+safeOut))*100),1) + '%';
+				chartPercentOut.text           = gnncDataNumber.__safeClear(((safeOut/       (safeIn+safeOut))*100)-gnncDataNumber.__safeClear(monthSafePercentDiscount_.text.replace('%','')),1) + '%';
+				
+				//----------------------------------------
+				
+				mp_.percentWidth = gnncDataNumber.__safeClear(monthSafePercentDiscount_.text.replace('%',''));
+				rp_.percentWidth = gnncDataNumber.__safeClear(chartPercentIn .text.replace('%',''));
+				dp_.percentWidth = gnncDataNumber.__safeClear(chartPercentOut.text.replace('%',''));
+				
+				rpl_.text = (rp_.percentWidth>20?'Receita '   :'') + rp_.percentWidth + '%' ;
+				dpl_.text = (dp_.percentWidth>20?'Despesa '   :'') + dp_.percentWidth + '%' ;
+				mpl_.text = (mp_.percentWidth>20?'Manutenção ':'') + mp_.percentWidth + '%' ;
+				
+				gnncGlobalLog.__add(safeInDisc +':safeInDisc');
+				gnncGlobalLog.__add(safeOutDisc+':safeOutDisc');
+				
+			}
+			
+			private function __emptyPercent(safeOutv:Boolean=true):void
+			{
+				var inpt:Object = safeOutv ? safeOutPercent_ : new Object();//safeInPercent_ ;
+				inpt.text = '0,00';
+				callLater(__sumGroup,[safeOutv]);
+			}
+			
+			private function labelFunc(data:Object, field:Object):String 
+			{
+				return "R$ "+ Number(data.value).toFixed(2);
+			}
+
+			private function labelSafe(labelValue:Object, previousValue:Object, axis:IAxis):String
+			{
+				axis.displayName;
+				axis.unitSize;
+				axis.title;
+				return gnncDataNumber.__safeReal(labelValue,0,'R$ ');
+			}
+
+			private function __getReport():void
+			{
+				var i:uint = 0;
+				var l:uint = chartInList.dataProvider.length > chartOutList.dataProvider.length ? chartInList.dataProvider.length : chartOutList.dataProvider.length;
+				
+				if(l<1){
+					new gnncAlert().__alert('Não foram encontrados valores na listagem.');
+					return;
+				}
+
+				var haveManupulation:Boolean = monthSafePercentDiscount_.text=='0%'?false:true;
+				var my:String = FINANCIAL_BALANCE_START_.selectedItem.label + ' ' + FINANCIAL_BALANCE_YEAR_.value;
+				var p:gnncFilePdf = new gnncFilePdf();
+				p._document_3_type = 'Cenário Receitas e Despesas - ' + my;
+				p.__addPage();
+
+				//-------------------------------------------------------------------------------------
+				p.__setFontWeight(true,13);
+				p.__addCellInLine('Cenário Receitas e Despesas','C',8);
+				p.__setFontWeight(true,p._normalFontSize-1);
+				p.__addCellInLine((SAFE_FINAL_.selected?'VALORES FATURADOS - BAIXADOS':'VALORES FATURADOS E NÃO FATURADOS'),'C',3);
+				//-------------------------------------------------------------------------------------
+
+				//-------------------------------------------------------------------------------------
+				if(ID_DEPARTAMENT_.value){
+					p.__setFontWeight(true,p._normalFontSize-1);
+					p.__addCellInLine(String(ID_DEPARTAMENT_.name) ,'C',3);
+				}
+				//-------------------------------------------------------------------------------------
+				
+				p.__breakLine(4);
+
+				//-------------------------------------------------------------------------------------
+				p.__clearAll();
+				p.__setFontWeight(true,p._normalFontSize-4);
+				p.__setFontStyle(p._normalFontSize-4,0x333333);
+				
+				p.__addCell("Despesa"   ,87,'L',4,0xeeeeee,0xdddddd);
+				p.__addCell("Equilíbrio",16,'C',4,0xdddddd,0xdddddd);
+				p.__addCell("Receita"   ,87,'R',4,0xeeeeee,0xdddddd);
+				p.__breakLine(5);
+				//-------------------------------------------------------------------------------------
+
+				
+				//-------------------------------------------------------------------------------------
+				p.__clearAll();
+				p.__setFontWeight(false,p._normalFontSize-2);
+				p.__setFontStyle(p._normalFontSize-1,0xffffff);
+				
+				p.__addCell(' '+dpl_.text,dp_.percentWidth*1.90,'C',8,0xcc3300,0xffffff);
+				p.__addCell(' '+rpl_.text,rp_.percentWidth*1.90,'C',8,0x2da899,0xffffff);
+				p.__addCell(' '+mpl_.text,mp_.percentWidth*1.90,'L',8,0xcc0099,0xffffff);
+				p.__breakLine(8);
+				//-------------------------------------------------------------------------------------
+
+				p.__breakLine(4);
+				
+				//-------------------------------------------------------------------------------------
+				p.__clearAll();
+				p.__setFontWeight(true,11);
+				p.__setFontStyle(11,0x333333);
+				
+				p.__addCell("Mês "+my,60,'L',5,0,0);
+				p.__addCell('',5,'C',5,0,0);
+				p.__addCell("Listagem",60,'L',5,0,0);
+				p.__addCell('',5,'C',5,0,0);
+				if(haveManupulation){
+				p.__addCell("Manipulação",60,'L',5,0,0);
+				}
+				p.__breakLine(6);
+				//-------------------------------------------------------------------------------------
+
+				//-------------------------------------------------------------------------------------
+				p.__clearAll();
+				p.__setFontWeight(true,p._normalFontSize-1);
+				p.__setFontStyle(p._normalFontSize-1,0x333333);
+
+				//linha 1
+				p.__addCell("Receita",30,'L',5,0,0);
+				p.__addCell(monthSafeIn_.text,30,'L',5,0,0);
+				p.__addCell('',5,'C',5,0,0);
+				p.__addCell("Receita",30,'L',5,0,0);
+				p.__addCell(chartInLabelList.text,30,'L',5,0,0);
+				p.__addCell('',5,'C',5,0,0);
+				if(haveManupulation){
+				p.__addCell("Receita",30,'L',5,0,0);
+				p.__addCell(monthSafeInDiscount_.text,30,'L',5,0,0);
+				}
+				p.__breakLine(5);
+				
+				//linha 2
+				p.__addCell("Despesa",30,'L',5,0,0);
+				p.__addCell(monthSafeOut_.text,30,'L',5,0,0);
+				p.__addCell('',5,'C',5,0,0);
+				p.__addCell("Despesa",30,'L',5,0,0);
+				p.__addCell(chartOutLabelList.text,30,'L',5,0,0);
+				p.__addCell('',5,'C',5,0,0);
+				if(haveManupulation){
+				p.__addCell("Despesa",30,'L',5,0,0);
+				p.__addCell(monthSafeOutDiscount_.text,30,'L',5,0,0);
+				}
+				p.__breakLine(5);
+				
+				//linha 3
+				p.__addCell("Diferença (R-D)",30,'L',5,0,0);
+				p.__addCell(monthSafeTotal_.text,30,'L',5,0,0);
+				p.__addCell('',5,'C',5,0,0);
+				p.__addCell("Diferença (R-D)",30,'L',5,0,0);
+				p.__addCell(chartTotalLabelList.text,30,'L',5,0,0);
+				p.__addCell('',5,'C',5,0,0);
+				if(haveManupulation){
+				p.__addCell("Porcentagem (%)",30,'L',5,0,0);
+				p.__addCell(monthSafePercentDiscount_.text,30,'L',5,0,0);
+				}
+				p.__breakLine(5);
+				
+				
+				/*
+				 
+			
+				<s:VGroup width="100%" height="100%">
+				<elements:elementLabelFont text="LISTAGEM" height="20" fontSize="16"/>
+				<s:Label text= width="100%" height="16" verticalAlign="middle" />
+				<s:Label text= width="100%" height="16" verticalAlign="middle"  />
+				<s:Label text= width="100%" height="16" verticalAlign="middle"  />
+				<s:Label text="Receita (%)" width="100%" height="16" verticalAlign="middle"  />
+				<s:Label text="Despesa (%)" width="100%" height="16" verticalAlign="middle"  />
+				<s:Rect height="10"/>
+				</s:VGroup>
+				<s:VGroup width="100%" height="100%" fontWeight="bold">
+				<s:Rect height="20" />
+				<s:Label id=""    text="R$ 0,00" width="100%" height="16" verticalAlign="middle" color="0x2da899"  />
+				<s:Label id=""   text="R$ 0,00" width="100%" height="16" verticalAlign="middle" color="0xcc3300"  />
+				<s:Label id="" text="R$ 0,00" width="100%" height="16" verticalAlign="middle"  />
+				<s:Label id="chartPercentIn"      text="R$ 0,00" width="100%" height="16" verticalAlign="middle" color="0x2da899"  />
+				<s:Label id="chartPercentOut"     text="0,00 %" width="100%" height="16" verticalAlign="middle" color="0xcc3300"  />
+				<s:Rect height="10"/>
+				</s:VGroup>
+				<s:VGroup width="100%" height="100%">
+				<elements:elementLabelFont text="MANIPULAÇÃO" height="20" fontSize="16"/>
+				<s:Label text="Receita" width="100%" height="16" verticalAlign="middle"  />
+				<s:Label text="Despesa" width="100%" height="16" verticalAlign="middle"  />
+				<s:Label text= width="100%" height="16" verticalAlign="middle"  />
+				<s:Rect height="10"/>
+				</s:VGroup>
+				<s:VGroup width="100%" height="100%" fontWeight="bold">
+				<s:Rect height="20" />
+				<s:Label id=""      text="R$ 0,00" width="100%" height="16" verticalAlign="middle" color="0xcc0099"  />
+				<s:Label id=""     text="R$ 0,00" width="100%" height="16" verticalAlign="middle" color="0xcc0099"  />
+				<s:Label id="" text="0,00 %" width="100%" height="16" verticalAlign="middle"  />
+				<s:Rect height="10"/>
+				</s:VGroup>
+				</s:HGroup>
+				
+				*/
+				
+				
+				p.__breakLine(8);
+
+				p.__clearAll();
+				p.__setFontWeight(true,p._normalFontSize-3);
+				p.__setFontStyle(p._normalFontSize-3,0x333333);
+
+				p.__addCell("Centro de Custo",50,'L',5,p._normalBgAlternative,p._normalBorder);
+				p.__addCell("Despesa",20,'C',5,p._normalBgAlternative,p._normalBorder);
+				p.__addCell("*",5,'C',5,p._normalBgAlternative,p._normalBorder);
+				p.__addCell("P%",10,'C',5,p._normalBgAlternative,p._normalBorder);
+				p.__addCell("M%",10,'C',5,p._normalBgAlternative,p._normalBorder);
+				p.__addCell("Centro de Custo",50,'L',5,p._normalBgAlternative,p._normalBorder);
+				p.__addCell("Receita",20,'C',5,p._normalBgAlternative,p._normalBorder);
+				p.__addCell("*",5,'C',5,p._normalBgAlternative,p._normalBorder);
+				p.__addCell("P%",10,'C',5,p._normalBgAlternative,p._normalBorder);
+				p.__addCell("M%",10,'C',5,p._normalBgAlternative,p._normalBorder);
+				p.__breakLine(6);
+
+				var oIn:Object;
+				var oOut:Object;
+				var h:Number = 4;
+				//chartOutList
+				for(i=0;i<l;i++){
+					if(i<chartOutList.dataProvider.length)
+					{
+						oOut = chartOutList.dataProvider.getItemAt(i);
+						p.__addCell(oOut.label,50,'L',h,0xffffff,0xdddddd);
+						p.__addCell(gnncDataNumber.__safeReal(oOut.value),20,'L',h,0xffffff,0xdddddd);
+						p.__addCell(oOut.type==1?'F':oOut.type==2?'V':'',5,'C',h,oOut.type==1?0xeeeeee:oOut.type==2?0xffffff:0xffffff,0xdddddd);
+						p.__addCell(Number(oOut.value/monthSafeOut*100).toFixed(2)+'%',10,'L',h,0xffffff,0xdddddd);
+						p.__addCell(oOut.percent+'%',10,'L',h,0xffffff,0xdddddd);
+					}
+					else{
+						p.__addCell('',95,'C',h,0,0);
+					}
+					if(i<chartInList.dataProvider.length)
+					{
+						oIn  = chartInList.dataProvider.getItemAt(i);
+						p.__addCell(oIn.label,50,'L',h,0xffffff,0xdddddd);
+						p.__addCell(gnncDataNumber.__safeReal(oIn.value),20,'L',h,0xffffff,0xdddddd);
+						p.__addCell(oIn.type==1?'F':oIn.type==2?'V':'',5,'C',h,oIn.type==1?0xeeeeee:oIn.type==2?0xffffff:0xffffff,0xdddddd);
+						p.__addCell(Number(oIn.value/gnncDataNumber.__safeClear(monthSafeIn_.text)*100).toFixed(2)+'%',10,'L',h,0xffffff,0xdddddd);
+						p.__addCell(oIn.percent+'%',10,'L',h,0xffffff,0xdddddd);
+						//monthSafeIn_.text
+					}
+					else{
+						p.__addCell('',95,'C',h,0,0);
+					}
+					p.__breakLine(h);
+				}
+				
+				p.__breakLine(4);
+				p.__setFontWeight(false,p._normalFontSize-2);
+				p.__addLine(0x444444,0.3);
+				
+				p.__addCell("Resumo da Listagem"    ,40 ,"L",h+2,p._normalBgAlternative,p._normalBorder);
+				p.__addCell("Despesa (D)"           ,20 ,"C",h+2,0xdddddd,p._normalBorder);
+				p.__addCell(chartInLabelList.text   ,30 ,"R",h+2,p._normalBgAlternative,p._normalBorder);
+				p.__addCell("Receita (R)"           ,20 ,"C",h+2,0xdddddd,p._normalBorder);
+				p.__addCell(chartOutLabelList.text  ,30 ,"R",h+2,p._normalBgAlternative,p._normalBorder);
+				p.__addCell("Balanço (R-D)"         ,25 ,"C",h+2,0xdddddd,p._normalBorder);
+				p.__addCell(chartTotalLabelList.text,25 ,"R",h+2,p._normalBgAlternative,p._normalBorder);
+				p.__breakLine(h+2);
+
+				p.__addCell("Resumo Mensal"         ,40 ,"L",h+2,p._normalBgAlternative,p._normalBorder);
+				p.__addCell("Despesa (D)"           ,20 ,"C",h+2,0xdddddd,p._normalBorder);
+				p.__addCell(monthSafeIn_.text       ,30 ,"R",h+2,p._normalBgAlternative,p._normalBorder);
+				p.__addCell("Receita (R)"           ,20 ,"C",h+2,0xdddddd,p._normalBorder);
+				p.__addCell(monthSafeOut_.text      ,30 ,"R",h+2,p._normalBgAlternative,p._normalBorder);
+				p.__addCell("Balanço (R-D)"         ,25 ,"C",h+2,0xdddddd,p._normalBorder);
+				p.__addCell(monthSafeTotal_.text    ,25 ,"R",h+2,p._normalBgAlternative,p._normalBorder);
+				p.__breakLine(h+2);
+
+				p.__clearAll();
+				p.__setFontWeight(true,p._normalFontSize-3);
+				p.__setFontStyle(p._normalFontSize-3,0x333333);
+
+				p.__breakLine(2);
+				p.__addCell('* Custo fixo (F) ou custo variável (V).',190,'L',h,0,0);
+				p.__breakLine(h);
+				p.__addCell('** A soma das receitas/despesas neste relatório é a soma da listagem exibida, podem existir outros valores.',190,'L',h,0,0);
+				p.__breakLine(h);
+				p.__addCell('*** P% - Porcentagem em relação ao total. ',190,'L',h,0,0);
+				p.__breakLine(h);
+				p.__addCell('**** M% - Manipulação em porcentagem. Significa que x% deste valor será enxugado no orçamento para equilibrar as contas.',190,'L',h,0,0);
+				p.__breakLine(h);
+				
+				p.__saveDesktop('Cenario Receitas e Despesas');
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<mx:SeriesInterpolate id="chartEffect" duration="1000"/>
+	</fx:Declarations>
+
+	<elements:elementBarStatus width="100%" height="100%" alpha=".7"/>
+	<s:Rect width="100%" height="150" bottom="35">
+		<s:fill>
+			<s:SolidColor color="0xffffff"/>
+		</s:fill>
+	</s:Rect>
+	<elements:elementHLine bottom="185" height="1" _COLOR="0xcccccc"/>
+	
+	<s:Scroller width="100%" height="100%" horizontalScrollPolicy="off">
+		
+		<s:VGroup width="100%" height="100%" gap="1">
+			
+			<s:HGroup width="100%" height="100%" gap="5" padding="20">
+				
+				<s:HGroup width="100%" height="100%" gap="10">
+					
+					<s:VGroup width="200" height="100%" gap="2">
+						
+						<s:Group width="100%" height="25">
+							<elements:elementBarStatus width="100%" height="25" radiusX="3" radiusY="3" alpha=".4"/>
+							<s:HGroup width="100%" height="25" verticalAlign="middle" paddingLeft="5" paddingRight="5" gap="1">
+								<s:Label height="25" fontWeight="bold" text="Listagem Despesa" verticalAlign="middle" fontSize="11" paddingTop="2" paddingLeft="5"/>
+							</s:HGroup>
+						</s:Group>
+						
+						<s:List id="chartOutList" width="200" height="100%" dataProvider="{new ArrayCollection()}" horizontalScrollPolicy="off"
+								allowMultipleSelection="true" 
+								itemRenderer="GNNC.modules.financial.itemRender.itemRender_chartFinancialGroup">
+						</s:List>
+						
+					</s:VGroup>
+					
+					<s:VGroup width="100%" height="100%" gap="5">
+						
+						<s:TabBar dataProvider="{panelSafeOut_}" height="25" />
+						
+						<mx:ViewStack id="panelSafeOut_" width="100%" height="100%">
+							<s:NavigatorContent label="GRÁFICO" width="100%" height="100%" creationPolicy="all">
+								
+								<mx:ColumnChart id="chartOut" dataProvider="{new ArrayCollection()}" width="100%" height="100%" columnWidthRatio=".5"  filters="[]" fontSize="10" showDataTips="true"
+												
+												extendLabelToEnd="true"
+												maxLabelWidth="50"
+												showLabelVertically="true"
+												
+												>
+									
+									<!-- type="clustered|overlaid|stacked|100%" -->
+									
+									<mx:horizontalAxis>
+										<mx:CategoryAxis id="chartOutAxias" categoryField="label" dataProvider="{new ArrayCollection()}"/>
+									</mx:horizontalAxis>
+									
+									<mx:verticalAxis>
+										<mx:LinearAxis  labelFunction="{labelSafe}"/>
+										<!-- minimum="0" maximum="1" -->
+									</mx:verticalAxis>    
+									
+									<mx:series>
+										<mx:ColumnSeries width="5" height="5" columnWidthRatio=".1"
+														 displayName="Despesa" fills="[0xcc3300]" 
+														 filters="[]" showDataEffect="{chartEffect}" xField="label" 
+														 yField="value"/>
+										<!-- labelFunction="{labelFunc}" -->
+										
+										<!-- mx:ColumnSeries width="5" height="5" columnWidthRatio=".1"
+										displayName="Receita" fills="[0x339900]"
+										filters="[]" showDataEffect="{chartEffect}" xField="label"
+										yField="value"/>
+										<mx:ColumnSeries width="5" height="5" columnWidthRatio=".1"
+										displayName="Balanço" fills="[0x555555]"
+										filters="[]" showDataEffect="{chartEffect}" xField="label"
+										yField="value"/>
+										<mx:ColumnSeries width="5" height="5" columnWidthRatio=".1"
+										displayName="Saldo Contas do Mês" fills="[0x0066ff]" 
+										filters="[]" showDataEffect="{chartEffect}" xField="label"
+										yField="value"/ -->
+									</mx:series>
+									<mx:seriesFilters>
+										<mx:DropShadowFilter alpha=".0" distance="0"/>
+									</mx:seriesFilters>
+									
+									<!-- mx:series>
+									<mx:ColumnSeries id="barSeries"
+									yField="avg"
+									xField="name"
+									displayName="name"
+									
+									labelPosition="outside"
+									labelAlign="center"
+									labelSizeLimit="900"
+									labelRotation="45"
+									columnWidthRatio="{slider.value}" />
+									</mx:series -->
+								</mx:ColumnChart>
+								
+							</s:NavigatorContent>
+							<s:NavigatorContent label="PIZZA" width="100%" height="100%" creationPolicy="all">
+								
+								<mx:PieChart id="chartOutPie" width="200" height="200" color="0x444444"
+											 dataProvider="{new ArrayCollection()}" focusEnabled="false"
+											 showDataTips="true">
+									<mx:series>
+										<mx:PieSeries field="value" labelPosition="none"
+													  nameField="label" showDataEffect="{chartEffect}">
+											<mx:fills>
+												
+												<mx:SolidColor alpha="1.0" color="0x8b0d3d"/>
+												<mx:SolidColor alpha="1.0" color="0xcf1321"/>
+												<mx:SolidColor alpha="1.0" color="0xf8ad2e"/>
+												<mx:SolidColor alpha="1.0" color="0x6cb831"/>
+												<mx:SolidColor alpha="1.0" color="0x004517"/>
+												<mx:SolidColor alpha="1.0" color="0x0194da"/>
+												<mx:SolidColor alpha="1.0" color="0x004890"/>
+												<mx:SolidColor alpha="1.0" color="0x002647"/>
+												<mx:SolidColor alpha="1.0" color="0x632d81"/>
+												<mx:SolidColor alpha="1.0" color="0xffef01"/>
+												<mx:SolidColor alpha="1.0" color="0xea8d98"/>
+												
+												<mx:SolidColor alpha="1.0" color="red"/>
+												<mx:SolidColor alpha="1.0" color="haloOrange"/>
+												<mx:SolidColor alpha="1.0" color="yellow"/>
+												<mx:SolidColor alpha="1.0" color="haloGreen"/>
+												<mx:SolidColor alpha="1.0" color="haloBlue"/>
+												
+											</mx:fills>
+											<mx:filters>
+												<mx:DropShadowFilter alpha=".1" distance="1"/>
+											</mx:filters>
+										</mx:PieSeries>
+									</mx:series>
+								</mx:PieChart>
+								
+							</s:NavigatorContent>
+							<s:NavigatorContent label="CONFIGURAÇÕES" width="100%" height="100%" creationPolicy="all">
+								
+								<elements:elementBarStatus width="100%" height="100%" radiusX="4" radiusY="4" alpha=".4" />
+								<s:VGroup width="100%" height="100%" gap="1" padding="10">
+									
+									<s:Label fontSize="11" height="16" fontWeight="bold" text="Descontar %" verticalAlign="middle" paddingRight="5"  />
+									
+									<s:HGroup gap="1" verticalAlign="middle">
+										<s:TextInput id="safeOutPercent_" height="25" width="60" text="0,00" textAlign="center"
+													 keyUp="{gnncDataNumber.__safeKeyEvent(event,true)}" 
+													 keyDown="{gnncDataNumber.__safeKeyEvent(event,true)}"
+													 maxChars="6"
+													 />
+										<s:Button label="Aplicar" click="{__sumGroup(true)}" height="25" fontWeight="bold"/>
+										<s:Button label="Remover" click="{__setPercent(true,true)}" height="25" fontWeight="bold" icon="{gnncEmbedBlackWhite.app_close_16_clean}" enabled="false"/>
+									</s:HGroup>
+									
+								</s:VGroup>
+								
+							</s:NavigatorContent>
+						</mx:ViewStack>
+						
+					</s:VGroup>
+					
+				</s:HGroup>
+				<elements:elementVLine width="5"/>
+				<s:HGroup width="100%" height="100%" gap="10">
+					
+					<s:VGroup width="100%" height="100%" gap="5">
+						
+						<s:TabBar dataProvider="{panelSafeIn_}" height="25" />
+						
+						<mx:ViewStack id="panelSafeIn_" width="100%" height="100%">
+							<s:NavigatorContent label="GRÁFICO" width="100%" height="100%" creationPolicy="all" >
+								<s:layout>
+									<s:VerticalLayout paddingTop="10"/>
+								</s:layout>
+								
+								<mx:ColumnChart id="chartIn" dataProvider="{new ArrayCollection()}" width="100%" height="100%" columnWidthRatio=".5"  filters="[]" fontSize="10" showDataTips="true">
+									<mx:horizontalAxis>
+										<mx:CategoryAxis id="chartInAxias" categoryField="label" dataProvider="{new ArrayCollection()}"/>
+									</mx:horizontalAxis>
+									<mx:verticalAxis>
+										<mx:LinearAxis  labelFunction="{labelSafe}"/>
+										<!-- minimum="0" maximum="1" -->
+									</mx:verticalAxis>    
+									<mx:series>
+										<mx:ColumnSeries width="5" height="5" columnWidthRatio=".1"
+														 displayName="Despesa" fills="[0x2da899]" 
+														 filters="[]" showDataEffect="{chartEffect}" xField="label"
+														 yField="value"/>
+										<!-- mx:ColumnSeries width="5" height="5" columnWidthRatio=".1"
+										displayName="Receita" fills="[0x339900]"
+										filters="[]" showDataEffect="{chartEffect}" xField="label"
+										yField="value"/>
+										<mx:ColumnSeries width="5" height="5" columnWidthRatio=".1"
+										displayName="Balanço" fills="[0x555555]"
+										filters="[]" showDataEffect="{chartEffect}" xField="label"
+										yField="value"/>
+										<mx:ColumnSeries width="5" height="5" columnWidthRatio=".1"
+										displayName="Saldo Contas do Mês" fills="[0x0066ff]" 
+										filters="[]" showDataEffect="{chartEffect}" xField="label"
+										yField="value"/ -->
+									</mx:series>
+									<mx:seriesFilters>
+										<mx:DropShadowFilter alpha=".0" distance="0"/>
+									</mx:seriesFilters>
+								</mx:ColumnChart>
+								
+							</s:NavigatorContent>
+							<s:NavigatorContent label="PIZZA" width="100%" height="100%" creationPolicy="all">
+								
+								<mx:PieChart id="chartInPie" width="200" height="200" color="0x444444"
+											 dataProvider="{new ArrayCollection()}" focusEnabled="false"
+											 showDataTips="true">
+									<mx:series>
+										<mx:PieSeries field="value" labelPosition="none"
+													  nameField="label" showDataEffect="{chartEffect}">
+											<mx:fills>
+												
+												<mx:SolidColor alpha="1.0" color="0x8b0d3d"/>
+												<mx:SolidColor alpha="1.0" color="0xcf1321"/>
+												<mx:SolidColor alpha="1.0" color="0xf8ad2e"/>
+												<mx:SolidColor alpha="1.0" color="0x6cb831"/>
+												<mx:SolidColor alpha="1.0" color="0x004517"/>
+												<mx:SolidColor alpha="1.0" color="0x0194da"/>
+												<mx:SolidColor alpha="1.0" color="0x004890"/>
+												<mx:SolidColor alpha="1.0" color="0x002647"/>
+												<mx:SolidColor alpha="1.0" color="0x632d81"/>
+												<mx:SolidColor alpha="1.0" color="0xffef01"/>
+												<mx:SolidColor alpha="1.0" color="0xea8d98"/>
+												
+												<mx:SolidColor alpha="1.0" color="red"/>
+												<mx:SolidColor alpha="1.0" color="haloOrange"/>
+												<mx:SolidColor alpha="1.0" color="yellow"/>
+												<mx:SolidColor alpha="1.0" color="haloGreen"/>
+												<mx:SolidColor alpha="1.0" color="haloBlue"/>
+												
+											</mx:fills>
+											<mx:filters>
+												<mx:DropShadowFilter alpha=".1" distance="1"/>
+											</mx:filters>
+										</mx:PieSeries>
+									</mx:series>
+								</mx:PieChart>
+								
+							</s:NavigatorContent>
+							<!-- s:NavigatorContent label="CONFIGURAÇÕES" width="100%" height="100%" creationPolicy="all">
+							
+							<elements:elementBarStatus width="100%" height="100%" radiusX="4" radiusY="4" alpha=".4" />
+							<s:VGroup width="100%" height="100%" gap="1" padding="10">
+							
+							<s:Label fontSize="11" height="16" fontWeight="bold" text="Descontar %" verticalAlign="middle" paddingRight="5"  />
+							
+							<s:HGroup gap="1" verticalAlign="middle">
+							<s:TextInput id="safeInPercent_" height="25" width="60" text="0,00" textAlign="center"
+							keyUp="{gnncDataNumber.__safeKeyEvent(event,true)}" 
+							keyDown="{gnncDataNumber.__safeKeyEvent(event,true)}"
+							/>
+							<s:Button label="Aplicar" click="{__sumGroup(false)}" height="25" fontWeight="bold"/>							
+							<s:Button label="Remover" click="{__setPercent(false,true)}" height="25" fontWeight="bold" icon="{gnncEmbedBlackWhite.app_close_16_clean}" enabled="false"/>
+							</s:HGroup>
+							
+							</s:VGroup>
+							
+							</s:NavigatorContent -->
+						</mx:ViewStack>
+						
+					</s:VGroup>
+					
+					<s:VGroup width="200" height="100%" gap="2">
+						
+						<s:Group width="100%" height="25">
+							<elements:elementBarStatus width="100%" height="25" radiusX="3" radiusY="3" alpha=".4"/>
+							<s:HGroup width="100%" height="25" verticalAlign="middle" paddingLeft="5" paddingRight="5" gap="1">
+								<s:Label height="25" fontWeight="bold" text="Listagem Receita" verticalAlign="middle" fontSize="11"/>
+							</s:HGroup>
+						</s:Group>
+						
+						<s:List id="chartInList" width="200" height="100%" dataProvider="{new ArrayCollection()}" horizontalScrollPolicy="off"
+								allowMultipleSelection="true"
+								itemRenderer="GNNC.modules.financial.itemRender.itemRender_chartFinancialGroup">
+						</s:List>
+						
+					</s:VGroup>
+					
+				</s:HGroup>
+				
+			</s:HGroup>
+			
+			
+			<!-- s:HGroup width="100%" gap="1" paddingLeft="20" paddingRight="20" paddingTop="0" paddingBottom="1">
+			<s:Group width="50%" height="25">
+			<elements:elementBarStatus height="25"/>
+			<s:HGroup width="100%" height="25" verticalAlign="middle" paddingLeft="5" paddingRight="5" gap="5">
+			<s:Label height="25" fontWeight="bold" text="R$ 0,00" verticalAlign="middle" fontSize="12" width="100%"/>
+			<s:Label text="(-5%) = " height="25" fontWeight="bold" width="100%" verticalAlign="middle" />
+			</s:HGroup>
+			</s:Group>
+			<elements:elementVLine height="25" _COLOR="0x000000" width="1"/> 
+			<s:Group width="50%" height="25">
+			<elements:elementBarStatus height="25"/>
+			<s:HGroup width="100%" height="25" verticalAlign="middle" paddingLeft="5" paddingRight="5" gap="5">
+			<s:Label height="25" fontWeight="bold" text="R$ 0,00" verticalAlign="middle" fontSize="12" width="100%"/>
+			<s:Label text="(-10.032,12) = " height="25" fontWeight="bold" width="100%" verticalAlign="middle" />
+			</s:HGroup>
+			</s:Group>
+			</s:HGroup -->
+			
+			
+			<s:HGroup width="100%" gap="1" paddingLeft="20" paddingRight="20" paddingTop="0" paddingBottom="1">
+				<s:Group id="dp_" width="100%" height="25">
+					<s:Rect width="100%" height="25" radiusX="3" radiusY="3">
+						<s:fill>
+							<s:SolidColor color="0xcc3300"/>
+						</s:fill>
+					</s:Rect>
+					<s:Label id="dpl_" text="%" height="25" width="100%" fontWeight="bold" textAlign="center" paddingTop="2" color="0xffffff" verticalAlign="middle" showTruncationTip="true" maxDisplayedLines="1" paddingLeft="3" paddingRight="3"/>
+				</s:Group>
+				<s:Group id="rp_" width="100%" height="25">
+					<s:Rect width="100%" height="25" radiusX="3" radiusY="3">
+						<s:fill>
+							<s:SolidColor color="0x2da899"/>
+						</s:fill>
+					</s:Rect>
+					<s:Label id="rpl_" text="%" height="25" width="100%" fontWeight="bold" textAlign="center" paddingTop="2" color="0xffffff" verticalAlign="middle"  showTruncationTip="true" maxDisplayedLines="1" paddingLeft="3" paddingRight="3"/>
+				</s:Group>
+				<s:Group id="mp_" width="10%" height="25">
+					<s:Rect width="100%" height="25" radiusX="3" radiusY="3">
+						<s:fill>
+							<s:SolidColor color="0xcc0099"/>
+						</s:fill>
+					</s:Rect>
+					<!-- Manipulação -->
+					<s:Label id="mpl_" width="100%" text="%" height="25" fontWeight="bold" textAlign="center" paddingTop="2" color="0xffffff" verticalAlign="middle" showTruncationTip="true" maxDisplayedLines="1" paddingLeft="3" paddingRight="3"/>
+				</s:Group>
+			</s:HGroup>
+			
+			<s:Rect height="20" />
+			
+			<s:HGroup width="100%" height="150" gap="1" padding="20">
+				
+				<s:HGroup width="650" height="100%" gap="2" fontSize="11">
+					<s:VGroup width="100%" height="100%" gap="2">
+						<elements:elementLabelFont text="MÊS" height="20" fontSize="16"/>
+						<s:Label text="Receita" width="100%" height="16" verticalAlign="middle" />
+						<s:Label text="Despesa" width="100%" height="16" verticalAlign="middle" />
+						<s:Label text="Diferença (R-D)" width="100%" height="16" verticalAlign="middle" />
+						<s:Rect height="10"/>
+					</s:VGroup>
+					<s:VGroup width="100%" height="100%" fontWeight="bold" gap="2">
+						<s:Rect height="20" />
+						<s:Label id="monthSafeIn_"    text="R$ 0,00" width="100%" height="16" verticalAlign="middle" color="0x2da899"  />
+						<s:Label id="monthSafeOut_"   text="R$ 0,00" width="100%" height="16" verticalAlign="middle" color="0xcc3300"  />
+						<s:Label id="monthSafeTotal_" text="R$ 0,00" width="100%" height="16" verticalAlign="middle"  />
+						<s:Rect height="10"/>
+					</s:VGroup>
+					<s:VGroup width="100%" height="100%" gap="2">
+						<elements:elementLabelFont text="LISTAGEM" height="20" fontSize="16"/>
+						<s:Label text="Receita" width="100%" height="16" verticalAlign="middle" />
+						<s:Label text="Despesa" width="100%" height="16" verticalAlign="middle"  />
+						<s:Label text="Diferença (R-D)" width="100%" height="16" verticalAlign="middle"  />
+						<s:Label text="Receita (%)" width="100%" height="16" verticalAlign="middle"  />
+						<s:Label text="Despesa (%)" width="100%" height="16" verticalAlign="middle"  />
+						<s:Rect height="10"/>
+					</s:VGroup>
+					<s:VGroup width="100%" height="100%" fontWeight="bold" gap="2">
+						<s:Rect height="20" />
+						<s:Label id="chartInLabelList"    text="R$ 0,00" width="100%" height="16" verticalAlign="middle" color="0x2da899"  />
+						<s:Label id="chartOutLabelList"   text="R$ 0,00" width="100%" height="16" verticalAlign="middle" color="0xcc3300"  />
+						<s:Label id="chartTotalLabelList" text="R$ 0,00" width="100%" height="16" verticalAlign="middle"  />
+						<s:Label id="chartPercentIn"      text="R$ 0,00" width="100%" height="16" verticalAlign="middle" color="0x2da899"  />
+						<s:Label id="chartPercentOut"     text="0,00 %" width="100%" height="16" verticalAlign="middle" color="0xcc3300"  />
+						<s:Rect height="10"/>
+					</s:VGroup>
+					<s:VGroup width="100%" height="100%" gap="2">
+						<elements:elementLabelFont text="MANIPULAÇÃO" height="20" fontSize="16"/>
+						<s:Label text="Receita" width="100%" height="16" verticalAlign="middle"  />
+						<s:Label text="Despesa" width="100%" height="16" verticalAlign="middle"  />
+						<s:Label text="Porcentagem (%)" width="100%" height="16" verticalAlign="middle"  />
+						<s:Rect height="10"/>
+					</s:VGroup>
+					<s:VGroup width="100%" height="100%" fontWeight="bold" gap="2">
+						<s:Rect height="20" />
+						<s:Label id="monthSafeInDiscount_"      text="R$ 0,00" width="100%" height="16" verticalAlign="middle" color="0xcc0099"  />
+						<s:Label id="monthSafeOutDiscount_"     text="R$ 0,00" width="100%" height="16" verticalAlign="middle" color="0xcc0099"  />
+						<s:Label id="monthSafePercentDiscount_" text="0,00 %" width="100%" height="16" verticalAlign="middle"  />
+						<s:Rect height="10"/>
+					</s:VGroup>
+				</s:HGroup>
+				
+				<s:Group width="100%" height="100%">
+					
+					
+				</s:Group>
+				<s:Group width="100%" height="100%">
+					
+					
+					
+				</s:Group>
+				
+			</s:HGroup>
+			
+			<s:Group width="100%" height="35" id="barButtons_">
+				<elements:elementBarStatus width="100%" height="35"/>
+				<s:HGroup width="100%" height="35" verticalAlign="middle" paddingLeft="5" paddingRight="5" gap="1" horizontalAlign="center">
+
+					<s:Label fontSize="11" fontWeight="bold" text="Centro de Custo" verticalAlign="middle" paddingLeft="5" paddingRight="5" />
+					<select:conSelect_DEPARTAMENT id="ID_DEPARTAMENT_" width="200" height="25" _ICON="false" _ADD="false"/>
+
+					<s:Label fontSize="11" fontWeight="bold" text="Plano de Contas" verticalAlign="middle" paddingLeft="5" paddingRight="5"  />
+					<s:NumericStepper id="FINANCIAL_LAST_" width="60" height="25" maximum="100" minimum="1" value="100" textAlign="center" />
+					
+					<s:Rect width="5"/>
+					
+					<!-- s:Label fontSize="11" fontWeight="bold" text="Mês" verticalAlign="middle" paddingLeft="0" / -->
+					<s:DropDownList id="FINANCIAL_BALANCE_START_" width="100" height="25" dataProvider="{gnncGlobalArrays._MONTH}" selectedIndex="0"/>
+					<s:NumericStepper id="FINANCIAL_BALANCE_YEAR_" width="60" height="25" maximum="2025" minimum="1990" textAlign="center" />
+					<!-- s:Label fontSize="11" fontWeight="bold" text="até"/>
+					<s:DropDownList id="FINANCIAL_BALANCE_END_" width="110"
+					dataProvider="{gnncGlobalArrays._MONTH}" selectedIndex="11"/ -->
+					
+					<s:Rect width="5"/>
+					<s:CheckBox id="SAFE_FINAL_" label="Faturados" selected="false" fontWeight="bold" toolTip="Previstos (baixados e não baixados)/ Faturados (baixados)" /> 
+					<s:Rect width="5"/>
+					
+					<s:Button label="Gerar" click="{__getGroupTotal()}" fontWeight="bold" icon="{gnncEmbedBlackWhite.bw_chart_16}"/>
+					<s:Button label="Relatório" click="{__getReport()}" fontWeight="bold" icon="{gnncEmbedBlackWhite.bw_report_16}"/>
+					
+				</s:HGroup>
+			</s:Group>
+			
+		</s:VGroup>
+	</s:Scroller>
+	
+</s:Module>

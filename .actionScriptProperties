@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<actionScriptProperties analytics="false" mainApplicationPath="DayByDayAppMoney.mxml" projectUUID="8d347c5d-4742-457e-b501-116db03b629d" version="10">
+  <compiler additionalCompilerArguments="-locale pt_BR -services &quot;GNNC/server/services-config.xml&quot;" autoRSLOrdering="true" copyDependentFiles="true" flex3CompatMode="false" fteInMXComponents="false" generateAccessible="false" htmlExpressInstall="true" htmlGenerate="false" htmlHistoryManagement="false" htmlPlayerVersionCheck="true" includeNetmonSwc="false" outputFolderPath="bin-debug" removeUnusedRSL="true" sourceFolderPath="src" strict="true" targetPlayerVersion="0.0.0" useApolloConfig="true" useDebugRSLSwfs="true" verifyDigests="true" warn="true">
+    <compilerSourcePath/>
+    <libraryPath defaultLinkType="0">
+      <libraryPathEntry kind="1" linkType="1" path="libs"/>
+      <libraryPathEntry kind="3" linkType="1" path="${DOCUMENTS}/_DayByDay_v1.6/bin/_DayByDay_v1.6.swc" sourcepath="/_DayByDay_v1.6/src" useDefaultLinkType="false"/>
+      <libraryPathEntry kind="3" linkType="1" path="${DOCUMENTS}/_DayByDay_v1.6_embed/bin/_DayByDay_v1.6_embed.swc" sourcepath="/_DayByDay_v1.6_embed/src" useDefaultLinkType="false"/>
+      <libraryPathEntry kind="3" linkType="1" path="${DOCUMENTS}/_DayByDay_v1.6_modules/bin/_DayByDay_v1.6_modules.swc" useDefaultLinkType="false"/>
+      <libraryPathEntry kind="4" path="">
+        <excludedEntries>
+          <libraryPathEntry kind="3" linkType="1" path="${PROJECT_FRAMEWORKS}/libs/flex.swc" useDefaultLinkType="false"/>
+          <libraryPathEntry kind="3" linkType="1" path="${PROJECT_FRAMEWORKS}/libs/core.swc" useDefaultLinkType="false"/>
+        </excludedEntries>
+      </libraryPathEntry>
+    </libraryPath>
+    <sourceAttachmentPath>
+      <sourceAttachmentPathEntry kind="3" linkType="1" path="${DOCUMENTS}/_DayByDay_v1.6/bin/_DayByDay_v1.6.swc" sourcepath="/_DayByDay_v1.6/src" useDefaultLinkType="false"/>
+      <sourceAttachmentPathEntry kind="3" linkType="1" path="${DOCUMENTS}/_DayByDay_v1.6_embed/bin/_DayByDay_v1.6_embed.swc" sourcepath="/_DayByDay_v1.6_embed/src" useDefaultLinkType="false"/>
+    </sourceAttachmentPath>
+  </compiler>
+  <applications>
+    <application path="DayByDayAppMoney.mxml">
+      <airExcludes/>
+    </application>
+  </applications>
+  <modules/>
+  <buildCSSFiles/>
+  <flashCatalyst validateFlashCatalystCompatibility="false"/>
+  <buildTargets>
+    <buildTarget buildTargetName="default">
+      <airSettings airCertificatePath="W:/daybyday/flex-project/certificates/valpec2020.pfx" airTimestamp="false" anePathSet="true" version="1">
+        <airExcludes>
+          <pathEntry path="GNNC/run/font/install.reg"/>
+          <pathEntry path="GNNC/run/SilentCMD.exe"/>
+          <pathEntry path="GNNC/run/font/install.bat"/>
+          <pathEntry path="GNNC/run/vcredist_x86.exe"/>
+          <pathEntry path="GNNC/run/scan"/>
+        </airExcludes>
+        <anePaths/>
+      </airSettings>
+      <actionScriptSettings version="1"/>
+    </buildTarget>
+  </buildTargets>
+</actionScriptProperties>

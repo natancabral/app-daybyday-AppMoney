@@ -1,0 +1,467 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:WindowedApplication xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					   xmlns:s="library://ns.adobe.com/flex/spark" 
+					   xmlns:mx="library://ns.adobe.com/flex/mx"
+					   
+					   preloader        = "GNNC.UI.gnncPreloader.gnncPreloader"
+					   usePreloader="false" 
+					   xmlns:financial	= "GNNC.modules.financial.*" 
+					   xmlns:stage		= "GNNC.elements.stage.*"
+					   xmlns:component	= "GNNC.elements.component.*"
+					   
+					   xmlns:user="GNNC.modules.user.*" 
+					   xmlns:modules="GNNC.modules.*" 
+					   
+					   creationComplete="{__start()}" 
+					   xmlns:elements="GNNC.UI.elements.*" 
+					   xmlns:local="*" 
+					   xmlns:calendar="GNNC.modules.calendar.*" 
+					   xmlns:attach="GNNC.modules.attach.*" 
+					   >
+	<fx:Script>
+		<![CDATA[
+			import GNNC.gnncEmbedImage;
+		]]>
+	</fx:Script>
+	<s:preinitialize>
+		<![CDATA[
+		
+		var gnncValues:gnncStartValues 		= new gnncStartValues();
+		gnncValues.login	 				= true;
+		gnncValues.windowsWidth				= 950;
+		gnncValues.windowsHeight			= 600;
+		//gnncValues.logo = false;
+		
+		new gnncStart						(this,'MONEY',gnncValues).__preInitialize(); 
+		new gnncStartAIR					(this,'MONEY',gnncValues).__preInitializeAIR();
+		new gnncStartStyle					(this).__apply();
+		
+		gnncGlobalStatic._programIcon16 	= GNNC.gnncEmbedLogo.LOGO_MONEY_16;
+		gnncGlobalStatic._programIcon32 	= GNNC.gnncEmbedLogo.LOGO_MONEY_32;
+		gnncGlobalStatic._programIcon48 	= GNNC.gnncEmbedLogo.LOGO_MONEY_48;
+		gnncGlobalStatic._programIcon128 	= GNNC.gnncEmbedLogo.LOGO_MONEY_128;
+		
+		]]>
+	</s:preinitialize>
+	<fx:Script>
+		<![CDATA[
+			import GNNC.event.gnncEventGeneral;
+			import spark.components.supportClasses.ScrollBarBase;
+			import mx.containers.Canvas;
+			import mx.controls.VScrollBar;
+			import spark.globalization.supportClasses.GlobalizationBase;
+			import GNNC.skin.scroller.skin_scroller;
+			import GNNC.skin.scroller.skin_vScrollBar;
+			import GNNC.skin.scroller.skin_hScrollBar;
+			import mx.controls.scrollClasses.ScrollBar;
+			import mx.controls.HScrollBar;
+			import mx.events.TreeEvent;
+			import mx.collections.ICollectionView;
+			import mx.events.ListEvent;
+			import mx.collections.ArrayCollection;
+			import GNNC.time.gnncTime;
+			import GNNC.UI.gnncAlert.gnncAlert;
+			import GNNC.UI.gnncNotification.gnncNotification;
+			import GNNC.UI.gnncPopUp.gnncPopUp;
+			import GNNC.data.data.gnncData;
+			import GNNC.data.data.gnncDataBindable;
+			import GNNC.data.encrypt.gnncEncryptKey;
+			import GNNC.data.globals.gnncGlobalStatic;
+			import GNNC.data.permission.gnncPermission;
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.main.gnncStart;
+			import GNNC.main.gnncStartAIR;
+			import GNNC.main.gnncStartStyle;
+			import GNNC.main.gnncStartValues;
+			import GNNC.modules.financial.formNew.newFinancialOffline;
+			import GNNC.modules.note.formNew.newNote;	
+			
+			[Bindable] public var _START:gnncStart = new gnncStart(this,'MONEY');
+			
+			private function __start():void
+			{
+				setSetting();
+				//gnncDataBindable.__loginSession(permission);
+			}
+			
+			private function setSetting():void
+			{
+				menuMain.addEventListener(gnncEventGeneral._selectItem,changeMenu);
+				
+				moduleFinancialHome_.financialSafe_.addEventListener(MouseEvent.CLICK,safe);
+				moduleFinancialHome_.financialSafeIn_.addEventListener(MouseEvent.CLICK,safeIn);
+				moduleFinancialHome_.financialSafeOut_.addEventListener(MouseEvent.CLICK,safeOut);
+				
+				stage_.addEventListener(MouseEvent.MOUSE_OVER,moduleFinancialSafe_.__closePopUps);
+			}
+			
+			private function changeMenu(e:*):void
+			{
+				panelCenter_.selectedIndex = menuMain.initialIndex;
+				
+				/*
+				initialIndex = item.index;
+				moduleStackCenterIndex = item.stackCenterIndex;
+				moduleAccondionLeftIndex = item.accordionLeftIndex;
+				*/
+			}
+			
+			private function safe(e:*=null):void{
+				panelCenter_.selectedIndex = 1;
+			}
+			
+			private function safeIn(e:*=null):void{
+				panelCenter_.selectedIndex = 1;
+				callLater(function():void{
+					callLater(function():void{
+						new gnncTime().__start(100,function():void{
+							moduleFinancialSafe_.__newFinancial(true);
+						},1);
+					});
+				});
+			}
+			
+			private function safeOut(e:*=null):void{
+				panelCenter_.selectedIndex = 1;
+				callLater(function():void{
+					callLater(function():void{
+						new gnncTime().__start(100,function():void{
+							moduleFinancialSafe_.__newFinancial(false);
+						},1);
+					});
+				});
+			}
+			
+			private function permission(e:*=null):void
+			{
+				//gnncPermission.__blockModule(this,'module-user');
+			}
+			
+			
+			//new gnncPopUp(parentApplication).__creation(new newFinancialOffline(),false,true,null,false,false);
+			
+			/*
+			var a:String = " SELECT á NATAN CABRAL ç SELECT á ã ç Feliz Natal Natan Cabral 123 !#$ Show de Bola {}[]();.,@# \"\' \´\´ \` çáúù|| ";
+			new gnncAlert().__alert(connCrypt.encrypt(a,'%key&',0),'toEncrypt0');
+			new gnncAlert().__alert(connCrypt.encrypt(a,'%key&',1),'toEncrypt1');
+			new gnncAlert().__alert(connCrypt.encrypt(a,'%key&',2),'toEncrypt2');
+			new gnncAlert().__alert(connCrypt.encrypt(a,'%key&',3),'toEncrypt3');
+			
+			new gnncAlert().__alert(ROT13.calculate(a),'ROT13');
+			new gnncAlert().__alert(ROT16.calculate(a),'ROT26');
+			*/	
+			
+			//var b:String = connCrypt.encrypt(a);
+			//var c:String = connCrypt.decrypt(b);
+			//var d:String = connCrypt.decrypt("6caLKBxG6BKFv4uR1N+ZdIbfxuVGc8zZ2pRFrsbbmIbXhapYWIuGnEpFvs3onUXPyplolNfGmaGixsKhT2CZkblJRY3BoEbnHyctRoWLKCDpxi4fPN+h57i+cmquuZlQUYuN7IuR0MjtRnOssr5GLnTL65WSi8nbioTO0eKLk9+Fgi8u4s3emIqLyduKhM7R4ouT35PCakWohcJqhK6xwmtzv26CLy50boIvLnRugk9FzNiZdGa4qthpcbSqx3pRi43si5HQyO1Gc6yyvkYudMvrlZKLyduKhNLX6JuVi26CLy7izd6YiovJ24qE0tfom5WZrr1GYouuvYVsvbTOdi50boIvLnRugi8udI6Zh5iLs7pzasqsy3V6u5GZTpjQ0d6JmYuzunNqi26CjJfa0pmKh8/E3YuVzNfth5LQ0+1GLnTc4YuX0IXdiInKyd6Wht3Z2pOK2dmnb2mLoplvacqpvnZmvbm6c2q5uYIvLnRugi8udI6Zh5iLs7pzasqpvnZmvbm6c2q5uaVGTd7K5YuI34XHZ3KwhYIvi93U5kaJzcnYjI7ZxueJjszR2IeIztTulJmLbvCOit3KmYqHz8Tfj5PM09yPhtfE2omI2trnmlO0qZljRbSp2GxuuabHaW6ssdhnaK60znR5dG6CLy50jpmHmIuzunNqyqvCdGa5qMJnccqmvGl0wLPNUkWT2N6Sis7ZmWl0wLPNTm6vjpkvi93U5kaJzcnYh5nfxtyORXRugp2N0NfeRonNydiHmd/G3I5TuK7RRmKLjL9vc6yzvG9mt4yZZ3Ovhd2IicrG7ZqGzs2nb2nKssJ+RaiF3YiJysvilIbZyOKHkZmuvS9Oi8bsRne6vMyFZr+5umlti6vLdXKLhd2IicrL4pSG2cjih5GLvMFrd7CFoXxuvq67cmqLscJxaouFmU1WkoWiRma5qZlORa+mzWuEsLO9RmOohaBYVZydplZZmJaZVlWllalgVZuMmWdzr4W9Z3mwxL50aYuhtkZMnZWqXlKbmaZXRZ2Ys1tepZqyTUWLjplGdL2pvnhFrb6Zama/qthrc6+RmWpmv6rYeXmst81SRbSpmWd4roU=");
+			
+			//SELECT á ã ç Feliz Natal Natan Cabral 123 !#$ Show de Bola {}[]();.,@# \"\' \´\´ \` çáúù||
+			//new gnncAlert().__alert(connCrypt.encrypt("SELECT *, (select NAME 		from dbd_client 			where dbd_client.ID = ID_CLIENT												) as NAME_CLIENT, (select NAME 		from dbd_group 				where dbd_group.ID = ID_GROUP												) as NAME_GROUP, (select NAME 		from dbd_departament 		where dbd_departament.ID = ID_DEPARTAMENT									) as NAME_DEPARTAMENT, (select NAME 		from dbd_financial_account 	where dbd_financial_account.ID = ID_FINANCIAL_ACCOUNT						) as NAME_FINANCIAL_ACCOUNT, (select COUNT(ID) 	from dbd_attach 			where dbd_attach.MIX = 'FINANCIAL' AND dbd_attach.ID_MIX = dbd_financial.ID	) as ROWS_ATTACH FROM  dbd_financial WHERE (VISIBLE LIKE   '1' ) AND ( DATE_END >= '2018-04-1 00:00:00' AND DATE_END <= '2018-04-1 23:59:59'  )  ORDER BY DATE_END, DATE_START, ID ASC "),'Original');
+			
+			//new gnncAlert().__alert(connCrypt.encrypt(a),'toEncrypt');
+			//new gnncAlert().__alert(c,'toDescrypt');
+			//new gnncAlert().__alert(d,'...');
+			//try no login
+			//_START._gnncGlobal._FINANCIAL_ACCOUNT.DATA_ARR  = new ArrayCollection([{NAME:'Conta',ID:'1',data:'1'}]);
+			//_START._gnncGlobal._GROUP.DATA_ARR  = new ArrayCollection([{NAME:'Grupo',ID:1,data:1,MIX:'FINANCIAL_OUT'}]);
+			
+			
+			public function __begin():void
+			{
+				//new gnncNotification().__show('Aniversário Hoje',"Usuário: 1 \nEquipe: 4 \nCliente: 11");
+				var _date:Date = new Date();
+				var _string:String = '';
+				if(_date.hours <= 12)
+					_string = "Bom dia, ";
+				else if(_date.hours >= 12 && _date.hours <= 18)
+					_string = "Boa tarde, ";
+				else if(_date.hours >= 18)
+					_string = "Boa noite, ";
+				
+				new gnncNotification().__show(_string+gnncData.__firstLetterUpperCase(gnncGlobalStatic._userNameClient)+'!','GNNC - Estratégia Empresarial',null,null,false,false,false);
+			}
+			
+			public function __newNote():void
+			{
+				var p:newNote = new newNote();
+				new gnncPopUp().__creation(p);
+			}
+			
+			public const arr:ArrayCollection = new ArrayCollection([
+				{ name: "Financeiro", icon:gnncEmbedBlackWhite.bw_financial_16, children: new ArrayCollection([ 
+					{name: "Contas", icon:gnncEmbedBlackWhite.bw_financial_16_account}, 
+					{name: "Orçado x Realizado", icon:gnncEmbedBlackWhite.bw_financial_16_safe}, 
+					{name: "Caixa Diário", icon:gnncEmbedBlackWhite.bw_financial_16_type_boleto}
+				])},
+				{ name: "Lançamentos", icon:gnncEmbedBlackWhite.bw_financial_16_safe, children: new ArrayCollection([ 
+					{name: "Receitas", icon:gnncEmbedBlackWhite.bw_financial_16_safe_in}, 
+					{name: "Despesas", icon:gnncEmbedBlackWhite.bw_financial_16_safe_out}
+				])},
+				{ name: "Cobranças", icon:gnncEmbedBlackWhite.bw_financial_16_type_boleto, children: new ArrayCollection([ 
+					{name: "Contratos", icon:"flex"}, 
+					{name: "Modelos de E-mail", icon:"flex"}, 
+					{name: "Dívida", icon:"flex"},
+					{name: "Arquivos", icon:"flex"}
+				])},
+				{ name: "Calendário", icon:gnncEmbedBlackWhite.bw_calendar_16, children: new ArrayCollection([ 
+					{name: "Agendamentos", icon:"flex"},
+					{name: "Financeiro", icon:"flex"}, 
+					{name: "Jobs / Tarefas", icon:"flex"}, 
+					{name: "Cursos / Aulas", icon:"flex"}
+				])},
+				{ name: "Cadastros", icon:gnncEmbedBlackWhite.bw_client_16_v2, children: new ArrayCollection([ 
+					{name: "Aniversários", icon:"flex"}, 
+					{name: "Etiquetas", icon:"flex"}, 
+					{name: "Ficha Cadastral", icon:"flex"}
+				])},
+				{ name: "Cenário", icon:gnncEmbedBlackWhite.bw_chart_16, children: null},
+				{ name: "Armazenamento", icon:gnncEmbedBlackWhite.bw_attach_16, children: new ArrayCollection([ 
+					{name: "Arquivos", icon:"flex"}
+				])},
+				{ name: "Segurança", icon:gnncEmbedBlackWhite.bw_permission_16, children: new ArrayCollection([ 
+					{name: "Usuários", icon:"flex"},
+					{name: "Permissões", icon:gnncEmbedBlackWhite.bw_permission_16_allow},
+					{name: "Apps", icon:"flex"}
+				])},
+				{ name: "Relatórios", icon:gnncEmbedBlackWhite.bw_report_16, children: new ArrayCollection([ 
+					{name: "Simplificado", icon:"flex"}
+				])}
+			]);
+			
+			public const simple:ArrayCollection = new ArrayCollection([
+				{ name: "Financeiro", icon:gnncEmbedBlackWhite.bw_financial_16, 
+					index:0, stackCenterIndex:0, accordionLeftIndex:0, children: null},
+				{ name: "Lançamentos", icon:gnncEmbedBlackWhite.bw_financial_16_safe, 
+					index:1, stackCenterIndex:0, accordionLeftIndex:0, children: null},
+				{ name: "Cobranças", icon:gnncEmbedBlackWhite.bw_financial_16_type_boleto, 
+					index:2, stackCenterIndex:0, accordionLeftIndex:0, children: null},
+				{ name: "Calendário", icon:gnncEmbedBlackWhite.bw_calendar_16, 
+					index:3, stackCenterIndex:0, accordionLeftIndex:0, children: null},
+				{ name: "Cadastros", icon:gnncEmbedBlackWhite.bw_client_16_v2, 
+					index:4, stackCenterIndex:0, accordionLeftIndex:0, children: null},
+				{ name: "Cenário", icon:gnncEmbedBlackWhite.bw_chart_16, 
+					index:5, stackCenterIndex:0, accordionLeftIndex:0, children: null},
+				{ name: "Armazenamento", icon:gnncEmbedBlackWhite.bw_attach_16, 
+					index:6, stackCenterIndex:0, accordionLeftIndex:0, children: null},
+				{ name: "Segurança", icon:gnncEmbedBlackWhite.bw_permission_16, 
+					index:7, stackCenterIndex:0, accordionLeftIndex:0, children: null},
+				{ name: "Relatórios", icon:gnncEmbedBlackWhite.bw_report_16, 
+					index:8, stackCenterIndex:0, accordionLeftIndex:0, children: null}
+			]);
+			
+			
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<mx:Move id="movePanel_" />
+		<mx:Move id="movePanelSpeed_" duration="300" />
+	</fx:Declarations>
+	
+	
+	<!-- elements:elementStageGeneralWhiteFit dataProvider="{panelCenter_}" colorStart="0x7d8ad1" colorEnd="0x606790" / --><!-- 0x606790 -->
+	<elements:elementStageGeneralWhiteFit id="stage_" colorStart="0x2da899" colorEnd="0x269083" left="68"
+										  minWidth="900" minHeight="600"
+										  />
+	<elements:elementLabelFont fontSize="11" text="ABRIR MENU" height="38" paddingTop="0" paddingLeft="15" paddingRight="0" color="0xffffff" left="68" 
+							   buttonMode="true" click="{menuMain.open()}" />
+	
+	<s:HGroup top="35" left="68" right="0" bottom="10" gap="0">
+		
+		<s:Scroller width="100%" height="100%">
+			<s:Group width="100%" height="100%">
+				<mx:ViewStack id="panelCenter_" width="100%" height="100%" selectedIndex="0"
+							  click="{/*menuMain.close()menuMain.closeTimes(1)*/}"
+							  mouseOver="{menuMain.close()}"
+							  >
+					<!-- mx:ViewStack id="panelCenter_" top="70" left="0" right="0" bottom="10" -->
+					<s:NavigatorContent creationPolicy="all" label="FINANCEIRO" icon="{gnncEmbedBlackWhite.bw_financial_16}" >
+						<financial:moduleFinancial_Dashboard id="moduleFinancialHome_"/>
+					</s:NavigatorContent>
+					<s:NavigatorContent creationPolicy="all" label="LANÇAMENTOS" icon="{gnncEmbedBlackWhite.bw_financial_16_safe}">
+						<financial:moduleFinancialSafe id="moduleFinancialSafe_"/>
+					</s:NavigatorContent>
+					<s:NavigatorContent width="100%" height="100%" label="COBRANÇA" icon="{gnncEmbedBlackWhite.bw_financial_16_type_boleto}">
+						<financial:moduleFinancialGroup_financialRecovery />
+					</s:NavigatorContent>
+					<s:NavigatorContent width="100%" height="100%" label="CALENDÁRIO" icon="{gnncEmbedBlackWhite.bw_calendar_16}">
+						<calendar:moduleCalendar 
+							_getCalendar="true"
+							_getCalendarCourseCron="true"
+							_getFinancial="true" 
+							_getJobs="true" 
+							/>
+					</s:NavigatorContent>
+					<s:NavigatorContent creationPolicy="all" label="CADASTROS" icon="{gnncEmbedBlackWhite.bw_client_16_v2}">
+						<user:moduleClientNew />
+					</s:NavigatorContent>
+					<s:NavigatorContent width="100%" height="100%" label="CENÁRIO" icon="{gnncEmbedBlackWhite.bw_chart_16}">
+						<financial:moduleFinancialGroup_stage />
+					</s:NavigatorContent>
+					<s:NavigatorContent width="100%" height="100%" label="ARMAZENAR" icon="{gnncEmbedBlackWhite.bw_attach_16}">
+						<attach:moduleFinancialGroup_attach/>
+					</s:NavigatorContent>
+					<s:NavigatorContent width="100%" height="100%" label="USUÁRIOS" icon="{gnncEmbedBlackWhite.bw_user_16}">
+						<user:moduleClientUserNew />
+					</s:NavigatorContent>
+					<s:NavigatorContent creationPolicy="all" label="RELATÓRIOS" icon="{gnncEmbedBlackWhite.bw_report_16}" >
+						<financial:moduleFinancialReport/>
+					</s:NavigatorContent>
+					
+					<!-- s:NavigatorContent width="100%" height="100%" label="LIVRO CX" icon="{gnncEmbedBlackWhite.bw_financial_16_type_book}">
+					<financial:moduleFinancialGroup_book />
+					</s:NavigatorContent -->
+					<!-- s:NavigatorContent width="100%" height="100%" label="CONTRATOS" 		icon="{gnncEmbedBlackWhite.bw_financial_16}">
+					<elements:elementLabelDropShadow text="VOCÊ NÃO TEM PERMISSÃO PARA ACESSAR ESTA ÁREA" horizontalCenter="0" verticalCenter="0" fontSize="12"/>
+					</s:NavigatorContent>
+					<s:NavigatorContent width="100%" height="100%" label="META / EMPRÉSTIMO" 			icon="{gnncEmbedBlackWhite.bw_chart_16}">
+					<elements:elementLabelDropShadow text="VOCÊ NÃO TEM PERMISSÃO PARA ACESSAR ESTA ÁREA" horizontalCenter="0" verticalCenter="0" fontSize="12"/>
+					</s:NavigatorContent>
+					<s:NavigatorContent width="100%" height="100%" label="COLABORADORES" 	icon="{gnncEmbedBlackWhite.bw_user_16}">
+					<elements:elementLabelDropShadow text="VOCÊ NÃO TEM PERMISSÃO PARA ACESSAR ESTA ÁREA" horizontalCenter="0" verticalCenter="0" fontSize="12"/>
+					</s:NavigatorContent>
+					<s:NavigatorContent width="100%" height="100%" label="GRUPOS" icon="{gnncEmbedBlackWhite.bw_series_group_16}">
+					<financial:moduleFinancialGroup_series />
+					</s:NavigatorContent -->
+					
+				</mx:ViewStack>
+			</s:Group>
+		</s:Scroller>
+		
+	</s:HGroup> 
+	
+	<s:Rect width="68" height="100%">
+		<s:fill>
+			<s:LinearGradient>
+				<s:GradientEntry color="0x269083"/>
+				<s:GradientEntry color="0x269083"/>
+			</s:LinearGradient>
+		</s:fill>
+	</s:Rect>
+	
+	<elements:elementMenuMain top="0" id="menuMain" dataProvider="{simple}" backgroundColor="0x269083" />
+	
+	<s:VGroup gap="1" width="68" bottom="0" paddingLeft="7" paddingBottom="10"
+			  rollOver="{panelDaybydayPopUp_.x = 0}" rollOut="{panelDaybydayPopUp_.x = -350}"
+			  >
+		<s:HGroup width="100%" verticalAlign="middle" horizontalAlign="center" gap="1" paddingRight="7" paddingBottom="10">
+			<s:Image source="{gnncEmbedImage.DIRECTION_DOWN_16_WHITE}" width="12" height="12" smooth="true" alpha=".2"/>
+		</s:HGroup>
+		<elements:elementLabelFont width="100%" height="9" text="TIPO" verticalAlign="middle" color="0xeeeeee" fontWeight="bold" fontSize="9" alpha=".7"/>
+		<elements:elementLabelFont width="100%" height="16" text="EMPRESA" verticalAlign="middle" color="0xffffff" fontWeight="bold"
+								   click="{}" buttonMode="true"
+								   />
+		<s:Rect height="1"/>
+		<elements:elementLabelFont width="100%" height="9" text="MODO" verticalAlign="middle" color="0xeeeeee" fontWeight="bold" fontSize="9" alpha=".7"/>
+		<elements:elementLabelFont width="100%" height="16" text="AVANÇADA" verticalAlign="middle" color="0xffffff" fontWeight="bold"
+								   click="{}" buttonMode="true"
+								   />
+		<s:HGroup width="100%" verticalAlign="middle" horizontalAlign="center" gap="1" paddingRight="7" paddingTop="10">
+			<s:Image source="{gnncEmbedImage.DIRECTION_UP_16_WHITE}" width="12" height="12" smooth="true" alpha=".2"/>
+		</s:HGroup>
+	</s:VGroup>
+	
+	<s:Group id="panelDaybydayPopUp_" width="350" height="200" bottom="0" x="-350" 
+			 moveEffect="{movePanelSpeed_}" 
+			 rollOut="{movePanel_.stop(); panelDaybydayPopUp_.x = -350}" 
+			 rollOver="{this.addElement(panelDaybydayPopUp_)}"
+			 >
+		<s:Rect width="100%" height="100%">
+			<s:fill>
+				<s:SolidColor color="0x269083"/>
+			</s:fill>
+		</s:Rect>
+		<s:VGroup  horizontalCenter="0" verticalCenter="0" verticalAlign="middle" gap="2" padding="20">
+			
+			<elements:elementLabelFont width="100%" height="11" text="TIPO" verticalAlign="middle" color="0xeeeeee" fontWeight="bold" fontSize="10" alpha=".7"/>
+			<elements:elementLabelFont color="0xffffff" verticalAlign="middle" fontSize="18" textAlign="left" width="100%" fontWeight="bold"
+									   text="EMPRESARIAL 1"
+									   />
+			
+			<elements:elementLabelFont width="100%" height="11" text="MODO" verticalAlign="middle" color="0xeeeeee" fontWeight="bold" fontSize="10" alpha=".7"/>
+			<elements:elementLabelFont color="0xffffff" verticalAlign="middle" fontSize="18" textAlign="left" width="100%" fontWeight="bold" 
+									   text="AVANÇADO ESPECIALISTA" 
+									   />
+			
+			<elements:elementLabelFont width="100%" height="11" text="MISSÃO" verticalAlign="middle" color="0xeeeeee" fontWeight="bold" fontSize="10" alpha=".7"/>
+			<s:Rect height="2"/>
+			<s:Button label="Adquirir Melhorias" fontSize="12" color="0xffffff" fontWeight="bold" width="100%" height="30" skinClass="GNNC.skin.button.skin_buttonLink"
+					  buttonMode="true" enabled="false"
+					  />
+		</s:VGroup>
+	</s:Group>
+	
+	
+	<!-- s:Image source="{gnncGlobalStatic._programIcon32}" left="10" top="5" width="25" height="25" smooth="true" smoothingQuality="high"/ -->
+	<!-- s:Image source="{gnncGlobalStatic._programIcon16}" left="10" top="10"/>
+	<elements:elementLabelFont height="16" top="10" verticalAlign="middle" color="0xffffff" left="35" text="appMoney" fontSize="14"
+	alpha="1"/ -->
+	<!-- s:Group width="70" height="70" rollOver="{panelDaybydayPopUp_.x = 0}" rollOut="{panelDaybydayPopUp_.x = -400}">
+	<s:Image source="{null}" width="70" height="70" />
+	</s:Group>
+	
+	<fx:Script>
+	<![CDATA[
+	import mx.events.FlexEvent;
+	import GNNC.data.data.gnncDataObject;
+	import mx.collections.ArrayCollection;
+	import GNNC.document.gnncFilesNative;
+	
+	private var file:gnncFilesNative = new gnncFilesNative();
+	
+	private function creationComplete(e:*=null):void{
+	file.__loadUrl('GNNC/help/appMoney.json',fComplete,fError);
+	}
+	private function fComplete(e:*=null):void{
+	var j:Object = JSON.parse(file._DATA_UTF);
+	listHelp_.dataProvider = gnncDataObject.__object2ArrayCollection(j);
+	}
+	private function fError(e:*=null):void{
+	}
+	
+	
+	]]>
+	</fx:Script>
+	
+	<s:Group id="panelDaybydayPopUp_" width="400" top="0" bottom="0" x="-400" 
+	moveEffect="{movePanel_}" 
+	rollOut="{movePanel_.stop(); panelDaybydayPopUp_.x = -400}" 
+	rollOver="{this.addElement(panelDaybydayPopUp_)}"
+	>
+	<stage:UI_stageBox/>
+	<s:Rect width="100%" height="100%" visible="false">
+	<s:fill>
+	<s:SolidColor color="0x444444"/>
+	</s:fill>
+	</s:Rect>
+	<s:VGroup gap="1" top="70" left="30" right="30" bottom="30">
+	<s:Group width="100%" height="30">
+	<elements:elementBarGray width="100%" height="30" alpha=".5"/>
+	<s:TabBar width="100%" height="30" dataProvider="{panelDaybyday_}" skinClass="GNNC.skin.tabBar.skin_tabBar_forMenu" />
+	</s:Group>
+	<mx:ViewStack id="panelDaybyday_" width="100%" height="100%">
+	<s:NavigatorContent creationPolicy="all" label="ANOTAÇÕES">
+	<s:layout>
+	<s:VerticalLayout gap="1"/>
+	</s:layout>
+	<s:List width="100%" height="10%" dataProvider="{new ArrayCollection()}" 
+	itemRenderer="GNNC.skin.dropDownList.itemRender.itemRender_hierarchy_forList" 
+	borderVisible="false" contentBackgroundAlpha="0"
+	/>
+	<s:TextArea width="100%" height="70" paddingBottom="7" paddingLeft="7" paddingRight="7" paddingTop="7"/>
+	<s:HGroup width="100%" gap="0">
+	<s:Button height="30" width="100%" label="Criar" icon="{gnncEmbedBlackWhite.bw_note_16_new}" />
+	<s:Button icon="{gnncEmbedBlackWhite.bw_note_16}" height="30" label="Nota" click="{__newNote()}"/>
+	</s:HGroup>
+	</s:NavigatorContent>
+	<s:NavigatorContent creationPolicy="all" label="TAREFAS">
+	</s:NavigatorContent>
+	<s:NavigatorContent creationPolicy="all" label="AJUDA">
+	<s:List id="listHelp_" width="100%" height="100%" />
+	</s:NavigatorContent>
+	</mx:ViewStack>
+	</s:VGroup>
+	</s:Group -->
+	
+</s:WindowedApplication>

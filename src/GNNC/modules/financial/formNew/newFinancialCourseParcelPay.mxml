@@ -1,0 +1,494 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  
+		  width="740" height="600" 
+		  creationComplete="{__start()}" 
+		  
+		  xmlns:stage="GNNC.elements.stage.*" 
+		  xmlns:component="GNNC.elements.component.*" 
+		  xmlns:select="GNNC.elements.component.select.*" xmlns:elements="GNNC.UI.elements.*" 
+		  
+		  >
+	<!--- 
+	
+	
+	
+	-->
+	<fx:Declarations>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import GNNC.UI.gnncAlert.gnncAlert;
+			import GNNC.UI.gnncPopUp.gnncPopUp;
+			import GNNC.data.data.gnncData;
+			import GNNC.data.data.gnncDataRand;
+			import GNNC.data.date.gnncDate;
+			import GNNC.data.globals.gnncGlobalStatic;
+			import GNNC.data.sql.gnncSql;
+			import GNNC.data.conn.gnncAMFPhp;
+			import GNNC.event.gnncEventGeneral;
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.modules.client.formView.viewClient;
+			import GNNC.modules.course.formNew.selectCourse;
+			import GNNC.skin.button.skin_button;
+			import GNNC.skin.button.skin_buttonBlue;
+			import GNNC.sqlTables.table_client;
+			import GNNC.sqlTables.table_course_discipline;
+			import GNNC.sqlTables.table_financial;
+			import GNNC.sqlTables.table_project;
+			
+			import mx.collections.ArrayCollection;
+			
+			import spark.events.IndexChangeEvent;
+			
+			//[Bindable] public var _gnncGlobal:gnncGlobalStatic 	= new gnncGlobalStatic(true);
+
+			private var _connCourse:gnncAMFPhp 		= new gnncAMFPhp();
+			private var _connParcel:gnncAMFPhp 		= new gnncAMFPhp();
+			private var _connStudent:gnncAMFPhp 	= new gnncAMFPhp();
+			private var _connExec:gnncAMFPhp 		= new gnncAMFPhp();
+			
+			
+			public var _tableFinancial:table_financial = new table_financial();
+
+			private var _gnncPopUp:gnncPopUp = new gnncPopUp();
+			private var _idCouse:uint = 0;
+			
+			public function __start():void
+			{
+				__config()
+			}
+
+			public function __config():void
+			{
+				student_.addEventListener(gnncEventGeneral._view,__courseClientView);
+
+				clientFinancial_._changeIndexEvent = __getCourses;
+				//clientFinancial_.list_.addEventListener(IndexChangeEvent.CHANGE,__getCourses);
+
+				course_.addEventListener(IndexChangeEvent.CHANGE,__courseParcel);
+				
+				//PARCEL
+				//parcel_.addEventListener(MouseEvent.MOUSE_DOWN,__courseParcelPay);
+				//parcel_.addEventListener(KeyboardEvent.KEY_UP,__courseParcelPay);
+				
+				//parcel_.addEventListener(KeyboardEvent.KEY_DOWN,__stopKey,false,1);
+				//parcel_.addEventListener(KeyboardEvent.KEY_UP,__stopKey,false,1);
+
+			}
+
+			public function __close():void
+			{
+				new gnncPopUp().__close(this);
+			}
+			
+			public function __getCourses(e:*=null):void
+			{
+				//new gnncAlert().__alert('aaa');
+				
+				if(clientFinancial_.list_.dataProvider.length<1 || clientFinancial_.list_.selectedIndex<0)
+				{
+					course_.dataProvider = new ArrayCollection();
+					course_.enabled = false;
+					return;
+				}
+				
+				var _sql:String = " select " +
+					" ID_PROJECT," +
+					" '"+clientFinancial_.value+"' as ID_CLIENT," +
+					" coalesce((SELECT NAME from dbd_project p where p.ID = ID_PROJECT LIMIT 0,1),'') NAME_COURSE " +
+					//" coalesce((SELECT c.NAME from dbd_client c, dbd_course_teacher j where j.ID_PROJECT LIKE dbd_project.ID AND c.ID like j.ID_CLIENT AND j.THEMAN LIKE '1' LIMIT 0,1),'-') NAME_TEACHER_THEMAN" +
+					" from dbd_course_student s where ID_CLIENT = '"+clientFinancial_.value+"' order by NAME_COURSE asc ";
+				
+				_connCourse.__sql(_sql,'','',__fResult,__fFault);
+
+				course_.selectedIndex = -1;
+				course_.enabled = false;
+				courseLoading_.text = "aguarde...";
+
+				function __fResult(e:*=null):void
+				{
+					courseLoading_.text = "";
+					course_.dataProvider = _connCourse.DATA_ARR;
+					if(_connCourse.DATA_ROWS>0)
+						course_.enabled = true;
+				}
+					
+				function __fFault(e:*=null):void
+				{
+					courseLoading_.text = "";
+					course_.dataProvider = new ArrayCollection();
+				}
+			}
+
+			private function __courseParcelMult():void
+			{
+				//var OBJ:Object					= parcel_.selectedItem;
+				//var IDXDATP:int 				= parcel_.selectedIndex;
+				//var IDXARRA:int 				= _connParcel.DATA_ARR.getItemIndex(OBJ);
+			}
+
+	
+			private function __stopKey(e:KeyboardEvent=null):void
+			{
+				e.stopImmediatePropagation();
+				e.stopPropagation();
+				return;
+			}
+			
+			private function __courseParcel(e:*=null):void
+			{
+				var OBJ:Object				= course_.selectedItem;
+				var IDXDATP:int 			= course_.selectedIndex;
+				var IDXARRA:int 			= _connCourse.DATA_ARR.getItemIndex(OBJ);
+				
+				if(IDXDATP<0)
+				{
+					parcel_.dataProvider = new ArrayCollection();
+					return;
+				}
+				
+				//__clearAll(false,false,true,true);
+				
+				/*
+				if(needSelectStudent_)
+				if(OBJ.ACTIVE_CLIENT == 0)
+				return;
+				*/
+				
+				parcel_.dataProvider = new ArrayCollection();
+				parcel_.enabled = false;
+				//course_.enabled = false;
+				
+				var _sql:String = "select p.*," +
+					
+					" ( '00-00-00' ) DATE_FINAL_PAY, " +
+					" ( (DATE_END - CURRENT_DATE())*-1 ) DATE_ALERT, " +
+					" ( select SUM(VALUE_IN_PAY) from view_course_parcel_pay_value_in v where v.ID_COURSE_PARCEL like p.ID AND v.ID_CLIENT like p.ID_CLIENT AND v.ID_PROJECT like p.ID_PROJECT  ) VALUE_IN_PAY, " +
+					" ( select COUNT(ID) 	from dbd_course_parcel_pay sp where sp.ID_COURSE_PARCEL = p.ID ) ROWS_PARCEL_PAY, " +
+					" ( select ENROLLMENT 	from dbd_client c where c.ID = '"+OBJ.ID_CLIENT+"' ) ENROLLMENT, " +
+					" ( select NAME 		from dbd_client c where c.ID = p.ID_CLIENT ) as NAME_STUDENT," +
+					" ( select NAME 		from dbd_project j where j.ID = p.ID_PROJECT ) as NAME_PROJECT ";  
+				
+					_sql += " from dbd_course_parcel p " ;
+				
+				 //if(typeSearch_ == 0)
+					_sql += " where p.ID_CLIENT = '"+OBJ.ID_CLIENT+"' AND p.ID_PROJECT = '"+OBJ.ID_PROJECT+"' " ;
+					//else if(typeSearch_ == 1)
+					//_sql += " where MONTH(p.DATE_END) like MONTH(CURRENT_DATE) AND YEAR(p.DATE_END) like YEAR(CURRENT_DATE) " ;
+					//else if(typeSearch_ == 2)
+					//_sql += " where (p.DATE_END - CURRENT_DATE()) < 1 AND p.DATE_FINAL like '0000-00-00 00:00:00' AND p.DATE_CANCELED like '0000-00-00 00:00:00' " ;
+				
+					//if(typeSearch_ == 0)
+					_sql += " ORDER BY p.DATE_END,p.ID ASC";
+					//				else if(typeSearch_ == 1)
+					//_sql += " ORDER BY NAME_PROJECT,NAME_STUDENT,p.DATE_END,p.ID ASC";
+					//else if(typeSearch_ == 2)
+					//_sql += " ORDER BY NAME_PROJECT,NAME_STUDENT,p.DATE_END,p.ID ASC";
+				
+					//if(typeSearch_>0)
+					//course_.selectedIndex = -1;
+				
+				//new gnncAlert().__alert(_sql);
+				
+				_connParcel.__sql(_sql,'','',__fResult,__fFault);
+				
+				function __fResult(e:*):void
+				{
+					parcel_.dataProvider 	= _connParcel.DATA_ARR;
+					parcel_.enabled 		= true;
+					course_.enabled 		= true;
+				}
+				
+				function __fFault(e:*):void
+				{
+					parcel_.dataProvider 	= new ArrayCollection();
+					parcel_.enabled 		= true;
+					course_.enabled 		= true;
+				}
+			}
+
+			private function __financialIn():void
+			{
+				var OBJ:Object					= parcel_.selectedItem;
+				var IDXDATP:int 				= parcel_.selectedIndex;
+				var IDXARRA:int 				= _connParcel.DATA_ARR.getItemIndex(OBJ);
+				
+				if(IDXDATP < 0)
+				{
+					new gnncAlert().__alert('Selecione a Mensalidade que deseja realizar o pagamento.');
+					return;
+				}
+				
+				var _table:table_financial		= new table_financial();
+				_table.VALUE_IN  				= OBJ.VALUE_IN;
+				_table.ID_CLIENT 				= OBJ.ID_CLIENT;
+				_table.ID_KEY					= gnncDataRand.__key();
+				
+				_table.DESCRIPTION				= "PAG:"+gnncDate.__date2Legend(OBJ.DATE_END).substring(3)+" | TURM:"+OBJ.NAME_PROJECT+" | ALUNO:"+OBJ.NAME_STUDENT+" | MATR:"+OBJ.ENROLLMENT+" ";
+				
+				var _page:newFinancial 			= new newFinancial();
+				_page._safeIn 					= true;
+				_page._tableFinancial 			= _table;
+				
+				new gnncPopUp().__creation(_page,false,false,__fRemove);
+				
+				function __fRemove(e:*):void
+				{
+					if(!_page._change)
+						return;
+					
+					//__courseParcel();
+				}
+			}
+			
+			private function __courseSelected():void
+			{
+				var _page:selectCourse = new selectCourse();
+				
+				new gnncPopUp().__creation(_page,false,true,__fRemove);
+				//var _gnncPopUp:gnncPopUp = new gnncPopUp();
+				//_gnncPopUp.__creation(_page,false,true,__fRemove);
+				
+				function __fRemove(e:*):void
+				{
+					if(!_page._idCourse){
+						btnStart_.setStyle("skinClass", skin_buttonBlue);
+						__clearAll(true,true,true,true);
+						return;
+					}
+					
+					btnStart_.setStyle("skinClass", skin_button);
+					
+					__clearAll(false,true,true,true);
+					__courseStudentList(_page._idCourse);
+					_idCouse = _page._idCourse;
+				}
+			}
+			
+			private function __courseStudentList(idCourse_:uint):void
+			{
+				
+				_gnncPopUp.__loading();
+				
+				var _sql:String = " select s.*, \n" +
+					
+					" ( select ENROLLMENT 		from dbd_client as c WHERE c.ID LIKE s.ID_CLIENT	) ENROLLMENT, \n" +
+					//" ( select ACCESS_WEB_PASSW from dbd_client as c WHERE c.ID LIKE s.ID_CLIENT	) ACCESS_WEB_PASSW, \n" +
+					" ( select DATE_BIRTH 		from dbd_client as c WHERE c.ID LIKE s.ID_CLIENT	) DATE_BIRTH, \n" +
+					" ( select ACTIVE 			from dbd_client as c WHERE c.ID LIKE s.ID_CLIENT	) ACTIVE_CLIENT, \n" +
+					" ( select CASE ACCESS_WEB WHEN '1' THEN 'YES' WHEN '0' THEN 'NO' ELSE '-' END as ACCESS_WEB FROM dbd_client as c WHERE c.ID LIKE s.ID_CLIENT	) ACCESS_WEB, \n" +
+					" coalesce((SELECT c.NAME from dbd_client c, dbd_course_teacher j where j.ID_PROJECT LIKE  s.ID_PROJECT AND c.ID like j.ID_CLIENT AND j.THEMAN LIKE '1' LIMIT 0,1) ,'-') NAME_TEACHER_THEMAN, \n" +
+					
+					" ( select COUNT(ID) 		from dbd_course_parcel x where x.ID_CLIENT like s.ID_CLIENT AND x.ID_PROJECT like s.ID_PROJECT 	) ROWS_COURSE_PARCEL, \n" +
+					
+					" ( select NAME 			from dbd_project p where p.ID like s.ID_PROJECT 	) NAME_COURSE, \n" +
+					" ( select DATE_START 		from dbd_project p where p.ID like s.ID_PROJECT		) DATE_START, \n" + //MES - primeira parcela
+					" ( select DATE_END 		from dbd_project p where p.ID like s.ID_PROJECT 	) DATE_END, \n" +	//MES - ultima parcela parcela
+					" ( select NAME 			from dbd_client  c where c.ID like s.ID_CLIENT  	) NAME_STUDENT \n" +		//
+					
+					//" ( select count(*) 		from dbd_financial f where f.ID_CLIENT like s.ID_CLIENT  ) ROWS_FINANCIAL, \n" +
+					//" ( select sum(f.VALUE_IN) from dbd_financial f where f.ID_CLIENT like s.ID_CLIENT AND DATE_FORMAT(f.DATE_FINAL,'%Y-%m') like '2014-04'  ) VALUE_FINANCIAL \n" + 
+					
+					" from dbd_course_student s where s.ID_PROJECT like '"+idCourse_+"' ORDER BY NAME_STUDENT ASC ";
+				
+				//new gnncAlert().__alert(idCourse_+'-1');
+				//new gnncAlert().__alert(_sql+'-2');
+				
+				_connStudent.__sql(_sql,'','',__fResult,__fFault);
+				
+				function __fResult(e:*):void
+				{
+					_gnncPopUp.__close();
+					
+					if(!_connStudent.DATA_ROWS)
+						return;
+					
+					student_.dataProvider = _connStudent.DATA_ARR;
+					
+					courseName_.text 	= gnncData.__trimText(gnncData.__firstLetterUpperCase(_connStudent.DATA_ARR.getItemAt(0).NAME_COURSE,true,false));
+					courseDateS_.text 	= 'De ' + gnncDate.__date2Legend(_connStudent.DATA_ARR.getItemAt(0).DATE_START) + ' até  ' + gnncDate.__date2Legend(_connStudent.DATA_ARR.getItemAt(0).DATE_END);
+					//courseDateE_.text = gnncDate.__date2Legend(_connStudent.DATA_ARR.getItemAt(0).DATE_END);
+					courseTeacher_.text = gnncData.__firstLetterUpperCase(_connStudent.DATA_ARR.getItemAt(0).NAME_TEACHER_THEMAN);
+				}
+				
+				function __fFault(e:*):void
+				{
+					_gnncPopUp.__close();
+				}
+				
+			}
+			
+			/*
+			
+			Grupo: Aperfeiçoamento
+			Produto: APERFEIÇOAMENTO - IMPLANTODONTIA
+			Inscrição: Encerrada, curso em andamento
+			Finalizado: Curso não finalizada
+			Início: 2013-03-14
+			Final: 2014-02-14
+			Alunos Matriculados: 13
+			Alunos Desistentes: 0
+			Frequências: 67
+			Id: 66
+			
+			*/
+			private function __courseClientView(e:*=null):void
+			{
+				var OBJ:Object				= student_.selectedItem;
+				var IDXDATP:int 			= student_.selectedIndex;
+				var IDXARRA:int 			= _connStudent.DATA_ARR.getItemIndex(OBJ);
+				
+				if(IDXDATP<0)
+				{
+					new gnncAlert().__alert('Selecione um Aluno na listagem.');
+					return;
+				}
+				
+				var _page:viewClient 		= new viewClient();
+				_page._tableClient 		= new table_client(OBJ.ID_CLIENT);
+				
+				new gnncPopUp().__creation(_page);
+			}
+
+			private function __clearAll(courseBoo_:Boolean,studentBoo_:Boolean,parcelBoo_:Boolean,parcelPayBoo_:Boolean):void
+			{
+				if(courseBoo_)
+				{
+					courseName_.text 	= '';
+					courseDateS_.text 	= '';
+					//courseDateE_.text = '';
+					courseTeacher_.text = '';
+					
+					_idCouse = 0;
+				}
+				
+				if(studentBoo_)
+					student_.dataProvider = new ArrayCollection();
+								
+				//change button color
+				if(courseBoo_ && studentBoo_ && parcelBoo_ && parcelPayBoo_)
+					btnStart_.setStyle("skinClass", skin_buttonBlue);
+				
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<elements:elementStageBoxPopUp />
+	<elements:elementLabelFont id="titlePopUp_" text="PAGAMENTO DE MENSALIDADE" fontSize="9" fontWeight="normal" left="1" top="6" right="1" textAlign="center" color="0x555555"/>
+	
+	<s:HGroup left="20" right="20" top="20" height="30" verticalAlign="middle" paddingRight="5">
+		<s:TabBar dataProvider="{panelCenter_}" height="30" focusEnabled="false" />
+		<s:Rect width="100%"/>
+	</s:HGroup>
+	
+	<mx:ViewStack id="panelCenter_" left="20" right="20" top="55" bottom="52">	
+		<s:NavigatorContent label="CURSO" width="100%" height="100%" creationPolicy="all" >
+			<s:layout>
+				<s:VerticalLayout gap="5"/>
+			</s:layout>
+			<s:VGroup width="100%" height="100%" gap="3">
+
+				<s:VGroup width="100%" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10" gap="3">
+
+					<s:HGroup gap="-1" width="100%">
+						
+						<s:Button label="Selecionar a Turma" id="btnStart_" click="{__courseSelected()}" 				width="100%" fontWeight="bold" height="30" icon="{gnncEmbedBlackWhite.bw_course_16}" 			skinClass="GNNC.skin.button.skin_buttonBlue" />
+						<s:Button label="Limpar Dados" 						click="{__clearAll(true,true,true,true)}" 	width="30"   fontWeight="bold" height="30" icon="{gnncEmbedBlackWhite.bw_clear_14_selection}" 	enabled="{student_.dataProvider.length?true:false}" />
+						
+					</s:HGroup>
+	
+					<s:Rect height="3"/>
+					<elements:elementHLine/>
+					<s:Rect height="3"/>
+	
+					<s:Label id="courseName_" text="" fontSize="13" fontWeight="bold" width="100%" maxDisplayedLines="1" showTruncationTip="true"/>
+					<s:Label id="courseDateS_" text="" fontSize="11" fontWeight="normal" width="100%" maxDisplayedLines="1" showTruncationTip="true" paddingTop="4"/>
+					<!-- s:Label id="courseDateE_" text="" fontSize="11" fontWeight="normal" width="100%" maxDisplayedLines="1" showTruncationTip="true"/ -->
+					<s:Label id="courseTeacher_" text="" fontSize="11" fontWeight="normal" width="100%" maxDisplayedLines="1" showTruncationTip="true" color="0x777777" paddingTop="4" />
+				
+				</s:VGroup>
+				
+				<s:Rect height="1"/>
+
+				<elements:elementLabelFont text="ALUNOS" fontSize="12" paddingBottom="3" height="22" paddingLeft="8" />
+
+				<s:List id="student_" dataProvider="{new ArrayCollection()}" width="100%" height="100%" horizontalScrollPolicy="off" borderVisible="false" 
+						itemRenderer="GNNC.modules.course.itemRender.itemRender_courseStudent_forList"
+						contentBackgroundAlpha="0">
+					<s:layout>
+						<s:VerticalLayout gap="0"/>
+					</s:layout>
+				</s:List>
+
+			</s:VGroup>
+			
+			
+			
+		</s:NavigatorContent>
+		<s:NavigatorContent label="ALUNO E TURMA" width="100%" height="100%" creationPolicy="all" >
+			<s:layout>
+				<s:VerticalLayout gap="5"/>
+			</s:layout>
+			
+			<s:Form width="100%">
+				<s:layout>
+					<s:FormLayout gap="-10" paddingBottom="-10" paddingLeft="0" paddingRight="0" paddingTop="0" />
+				</s:layout>
+				<s:FormItem label="Cliente">
+					<select:conSelect_CLIENT id="clientFinancial_" width="400" height="30" _ADD="true" />
+				</s:FormItem>
+				<elements:elementHLine height="12" />
+				<s:FormItem label="Turma">
+					<s:DropDownList id="course_" width="373" height="25" prompt="Selecione a turma..." dataProvider="{null}" labelField="NAME_COURSE" change="{}" enabled="false"/>
+					<s:Button icon="{gnncEmbedBlackWhite.bw_clear_14_selection}" toolTip="Limpar seleção" click="{ course_.selectedIndex=-1; parcel_.dataProvider = new ArrayCollection(); }" width="25" height="25" skinClass="GNNC.skin.button.skin_buttonLink"/>
+					<s:Label text="" id="courseLoading_" textAlign="right" width="100%"/>
+				</s:FormItem>
+				<elements:elementHLine height="12" />
+			</s:Form>
+
+			<s:List id="parcel_"  dataProvider="{new ArrayCollection()}" width="100%" height="100%" horizontalScrollPolicy="off" borderVisible="true" 
+					itemRenderer="GNNC.modules.course.itemRender.itemRender_courseParcel_forList"
+					contentBackgroundAlpha="0" allowMultipleSelection="true" change="{__courseParcelMult()}"
+					>
+				<s:layout>
+					<s:VerticalLayout gap="0"/>
+				</s:layout>
+			</s:List>
+
+			<elements:elementHLine height="1"/>
+			
+			<s:Group width="100%" height="30">
+				<elements:elementBarStatus width="100%" height="30" alpha=".5"/>
+				<s:HGroup width="100%" gap="1" paddingRight="3" verticalAlign="middle">
+					
+					<s:Rect width="100%"/>
+					
+					<s:Button icon="{gnncEmbedBlackWhite.bw_financial_16_safe_in}" label="Receita (cadastrar pagamento)" fontWeight="bold" click="{__financialIn()}"/>
+					<!-- s:Button icon="{gnncEmbedBlackWhite.bw_financial_16_safe_out}" label="Despesa" fontWeight="bold" click="{}" enabled="false"/>
+					<s:Button label="Anexar Pagamento" click="{__courseParcelPayOpen()}" height="25" fontWeight="bold" icon="{gnncEmbedBlackWhite.bw_financial_16_safe}" enabled="{parcel_.selectedIndex>-1?true:false}" skinClass="GNNC.skin.button.skin_buttonBlue" />
+					
+					<elements:elementVLine width="7" _COLOR="0x888888" height="25"/>
+					<s:Button label="Visualizar" click="{}" height="25" fontWeight="bold" icon="{gnncEmbedBlackWhite.bw_view_16}" toolTip="Visualizar Pagamento" enabled="{false/*parcel_.selectedIndex>-1?true:false*/}" />
+					<s:Button label="Atualizar" click="__courseParcelPay()" height="25" fontWeight="normal" icon="{gnncEmbedBlackWhite.bw_refresh_16}" enabled="{parcel_.selectedIndex>-1?true:false}" />
+					<elements:elementVLine width="7" _COLOR="0x888888" height="25"/>
+					<s:Button label="Desanexar" toolTip="Desanexar de Pagamento da parcela" click="{__courseParcelPayDelete()}" height="25" width="25" fontWeight="normal" icon="{gnncEmbedBlackWhite.bw_delete_16}" enabled="{parcelPay_.selectedIndex>-1?true:false}" /-->
+					
+				</s:HGroup>
+			</s:Group>
+
+		</s:NavigatorContent>
+	</mx:ViewStack>
+
+	<s:HGroup left="1" right="1" bottom="1" height="34" gap="2" paddingLeft="5" paddingRight="5" verticalAlign="middle">
+		<s:Rect width="100%"/>
+		<s:Rect width="5"/>
+		<s:Button height="25" icon="{gnncEmbedBlackWhite.app_close_16_clean}" label="Fechar" click="{__close()}" skinClass="GNNC.skin.button.skin_buttonLink" />
+	</s:HGroup>
+	
+	<s:Button top="4" right="4" click="{__close()}" width="10" height="10" tabFocusEnabled="false" toolTip="Fechar" />
+
+</s:Module>

@@ -1,0 +1,4217 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009"
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:mx="library://ns.adobe.com/flex/mx"
+		  
+		  xmlns:gnncLoading="GNNC.UI.gnncLoading.*"
+		  xmlns:component="GNNC.elements.component.*"
+		  xmlns:stage="GNNC.elements.stage.*"
+		  xmlns:select="GNNC.elements.component.select.*"
+		  xmlns:gnncDateField4="GNNC.UI.gnncDateField4.*"
+		  
+		  width="100%" height="100%" 
+		  creationComplete="{__start()}" xmlns:elements="GNNC.UI.elements.*"
+		  >
+	<!--- 
+	
+	Juro por mês
+	J = C.i.n
+	Juro por dia
+	J = C.((i/100)/30).(n/30)
+	Onde:
+	J = juros,
+	C = capital,
+	i = taxa de empréstimo
+	n = períodos
+	
+	Por mes
+	M = C . (1 + i . n)
+	Por dia
+	M = C . (1 + ((i/100)/30) . n(em dias))
+	
+	[Cálculo SQL MySql Valor + Juro + Multa + Desconto de Pontualidade:]
+	ROUND((dbd_financial.VALUE_IN + dbd_financial.VALUE_OUT) * (1 + ((dbd_financial.FINE_PERCENT/100)/dbd_financial.FINE_PERCENT_TIME) * DATEDIFF(NOW(),dbd_financial.DATE_END) )+(dbd_financial.FINE_VALUE)+(dbd_financial.FINE_VALUE_PERCENT/100*(dbd_financial.VALUE_IN + dbd_financial.VALUE_OUT)),2) as V,
+	
+	[Sabe se cobra juros e multa ou aplica desconto de pontualidade:]
+	CASE
+	WHEN DATEDIFF(NOW(),dbd_financial.DATE_END) > 0 THEN "venceu"
+	ELSE "desconto de pontualidade"
+	END
+	
+	[Juntando os dois acima:]
+	CASE
+	WHEN DATEDIFF(NOW(),dbd_financial.DATE_END) > 0 THEN 
+	ROUND((dbd_financial.VALUE_IN + dbd_financial.VALUE_OUT) * (1 + ((dbd_financial.FINE_PERCENT/100)/dbd_financial.FINE_PERCENT_TIME) * DATEDIFF(NOW(),dbd_financial.DATE_END) )+(dbd_financial.FINE_VALUE)+(dbd_financial.FINE_VALUE_PERCENT/100*(dbd_financial.VALUE_IN + dbd_financial.VALUE_OUT)),2) 
+	ELSE     
+	ROUND((dbd_financial.VALUE_IN + dbd_financial.VALUE_OUT)-dbd_financial.DISCOUNT_PUNCTUALITY,2)
+	END as VALUE_FINAL
+	
+	
+		
+	TRANSFERÊNCIA
+	
+	MIX
+	- FINANCIAL_TRANS
+	
+	DOCUMENT_NUMBER
+	- 2asd8sdd3aa78728738723789 (exemplo, com letras)
+	- è o key da entrada e saída das contas. Deve conter o mesmo número.
+	
+	
+	(Dois cadastros)
+	Conta que entra
+	VALUE_IN = VALUE_IN_PAY
+	Conta que sai
+	VALUE_OUT = VALUE_OUT_PAY
+	
+	DATE_FINAL
+	- Finaliza
+	
+	DESCRIPTION do Cliente
+	NUMBERO e LETRA do Cliente 
+	
+	
+	-->
+	<fx:Script>
+		<![CDATA[
+			import GNNC.UI.gnncAlert.gnncAlert;
+			import GNNC.UI.gnncNotification.gnncNotification;
+			import GNNC.UI.gnncPopUp.gnncPopUp;
+			import GNNC.data.conn.gnncAMFPhp;
+			import GNNC.data.data.gnncData;
+			import GNNC.data.data.gnncDataArrayCollection;
+			import GNNC.data.data.gnncDataBindable;
+			import GNNC.data.data.gnncDataNumber;
+			import GNNC.data.data.gnncDataVector;
+			import GNNC.data.date.DateUtils;
+			import GNNC.data.date.gnncDate;
+			import GNNC.data.file.gnncFilePdf;
+			import GNNC.data.globals.gnncGlobalArrays;
+			import GNNC.data.globals.gnncGlobalLog;
+			import GNNC.data.globals.gnncGlobalStatic;
+			import GNNC.data.permission.gnncPermission;
+			import GNNC.data.permission.gnncPermissionSet;
+			import GNNC.data.sql.gnncSql;
+			import GNNC.event.gnncCloseEvent;
+			import GNNC.event.gnncEventGeneral;
+			import GNNC.gnncEmbedBank;
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.gnncEmbedImage;
+			import GNNC.keyboard.gnncKeyboard;
+			import GNNC.modules.attach.formNew.newAttach;
+			import GNNC.modules.client.formNew.newClient;
+			import GNNC.modules.client.formNew.newClientQuick;
+			import GNNC.modules.course.formNew.selectCourse;
+			import GNNC.modules.financial.formNew.newConnection;
+			import GNNC.modules.financial.formNew.newCourseParcelFinancial;
+			import GNNC.modules.financial.formNew.newCourseParcelFinancialPay;
+			import GNNC.modules.financial.formNew.newFinancial;
+			import GNNC.modules.financial.formNew.newFinancialCourseParcelPay;
+			import GNNC.modules.financial.formNew.newFinancialNote;
+			import GNNC.modules.financial.formNew.newFinancialPay;
+			import GNNC.modules.financial.formNew.newFinancialReceipt;
+			import GNNC.modules.financial.formNew.newFinancialReversal;
+			import GNNC.modules.financial.formNew.newFinancialTrans;
+			import GNNC.modules.financial.formNew.selectAccount;
+			import GNNC.modules.financial.formView.viewFinancial;
+			import GNNC.modules.financial.report.gnncFileReport_financial_list;
+			import GNNC.others.gnncScrollPosition;
+			import GNNC.skin.button.skin_button;
+			import GNNC.skin.button.skin_buttonBlue;
+			import GNNC.sqlTables.table_attach;
+			import GNNC.sqlTables.table_client;
+			import GNNC.sqlTables.table_financial;
+			import GNNC.time.gnncTime;
+			
+			import com.htmlFilter.text;
+			
+			import mx.collections.ArrayCollection;
+			import mx.events.FlexEvent;
+			
+			
+			[Bindable] private var _gnncGlobal:gnncGlobalStatic = new gnncGlobalStatic(true);
+			
+			private var _financial:gnncAMFPhp    = new gnncAMFPhp();
+			private var _connStudent:gnncAMFPhp  = new gnncAMFPhp();
+			
+			private var _connExec:gnncAMFPhp  = new GNNC.data.conn.gnncAMFPhp(); //general
+			private var connExec11:gnncAMFPhp = new gnncAMFPhp(); //update
+			private var connExec12:gnncAMFPhp = new gnncAMFPhp(); //update
+			private var connExec13:gnncAMFPhp = new gnncAMFPhp(); //update
+			
+			private const _MIX:String            = 'FINANCIAL';
+			
+			private const _today:Date 	         = new Date(); 
+			private var _month:uint 	         = new Date().month; 	//JAN --> 0
+			private var _year:uint 		         = new Date().fullYear; 	//2012
+			
+			//accounts
+			private var _AllAccounts:Boolean 	 = true;//false;
+			private var _idAccount:uint 		 = 0;
+			private var _nameAccount:String 	 = '';
+			//course/turma
+			private var idCourse:uint            = 0;
+			
+			private var _gnncPopUp:gnncPopUp     = new gnncPopUp();
+			private var _gnncFilePdf:gnncFilePdf = new gnncFilePdf();
+			
+			private function __start():void
+			{
+				//set first
+				setCurrentState('normal');
+				
+				FINANCIAL_.addEventListener('VIEW_FATHER',__financialViewReference);
+				FINANCIAL_.addEventListener(gnncEventGeneral._view,__financialView);
+				FINANCIAL_.addEventListener(gnncEventGeneral._key,__listFinancialParcel);
+				FINANCIAL_.addEventListener(gnncEventGeneral._dateFinalAdd,__financialDateFinal);
+				FINANCIAL_.addEventListener(KeyboardEvent.KEY_DOWN,__blockKey);
+				
+				listPanel_.addEventListener(gnncEventGeneral._view,__financialView);
+				
+				this.addEventListener(KeyboardEvent.KEY_UP,
+					function(event:KeyboardEvent):void
+					{
+						if (gnncKeyboard.__F5(event)) refreshData();
+						
+						if (gnncKeyboard.__CONTROL_AND_N_1(event)) __newFinancial(true);
+						if (gnncKeyboard.__CONTROL_AND_N_2(event)) __newFinancial(false);
+						if (gnncKeyboard.__CONTROL_AND_N_3(event)) __newFinancialTrans();
+					}
+				);
+				
+				FINANCIAL_.addEventListener(MouseEvent.CLICK,__closePopUps);
+				
+				__changeMonth(_month,false,_year);
+				
+				//gnncDataBindable.__loginSession(__resetAccount);
+				gnncDataBindable.__loginSession(__AllAccount);
+				gnncDataBindable.__loginSession(permission);
+				
+				//set deafult
+				callLater(function():void{
+					setCurrentState('normal');
+				});
+			}
+			
+			public function __closePopUps(e:*=null):void
+			{
+				//showAddClient_.displayPopUp = false; 
+				calendarShow_.displayPopUp = false;
+			}
+			
+			private function permission(e:*=null):void
+			{
+				gnncPermission.__blockModule(this,'module-safe');
+			}
+			
+			private function __blockKey(e:KeyboardEvent):void
+			{
+				if(e.currentTarget.enabled == false){
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					e.stopPropagation();
+				}
+			}
+			
+			private function gloListGo(top:Boolean):void
+			{
+				if(top)
+					gnncScrollPosition.__setTop(FINANCIAL_);
+				else
+					gnncScrollPosition.__setEnd(FINANCIAL_);
+			}
+			
+			/*
+			
+			var objDat:Object         = FINANCIAL_.selectedItem;
+			var idxDat:int            = FINANCIAL_.selectedIndex;
+			var idxArr:int            = _financial.DATA_ARR.getItemIndex(objDat);				
+			var itens:Vector.<Object> = FINANCIAL_.selectedItems;
+			var itensCount:uint       = itens.length;
+			
+			*/
+			private function checkDataList(allowZeroSelect:Boolean,allowOneSelect:Boolean,allowMultiSelect:Boolean):Boolean
+			{
+				var listMain:Object = null; 
+				
+				if(listMain==null)
+					listMain = FINANCIAL_;
+				
+				var objDat:Object         = listMain.selectedItem;
+				var idxDat:int            = listMain.selectedIndex;
+				var itens:Vector.<Object> = listMain.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				//------------------------------------------------------------------------------------------------
+				listMain.validateNow();
+				listMain.validateDisplayList();
+				_financial.DATA_ARR = new ArrayCollection(listMain.dataProvider.toArray());
+				_financial.DATA_ARR.refresh();
+				//------------------------------------------------------------------------------------------------
+				if(listMain.dataProvider.length==0)
+					return false;
+				
+				if( itensCount == 1 && allowOneSelect == false ){
+					new gnncNotification().__show('Selecione','Selecione mais de um lançamento na listagem.',gnncEmbedBlackWhite.bw_all_32);
+					return false;
+				}
+				if( itensCount > 1 && allowMultiSelect == false ){
+					new gnncNotification().__show('Selecione','Selecione apenas um lançamento na listagem.',gnncEmbedBlackWhite.bw_all_32);
+					return false;
+				}
+				if( idxDat < 0 && allowZeroSelect == false ){
+					new gnncNotification().__show('Selecione','Selecione um lançamento na lista',gnncEmbedBlackWhite.bw_all_32);
+					return false;
+				}
+				//------------------------------------------------------------------------------------------------
+				if( listMain.enabled == false ){
+					//new gnncAlert().__alert('Aguarde alguns segundos...','Operação em andamento');
+					new gnncNotification().__show('Aguarde alguns segundos...','Operação em andamento',gnncEmbedBlackWhite.bw_calendar_32_hour);
+					return false;
+				}
+				
+				return true;
+			}
+			
+			private function checkDataType(allowMixFin:Boolean,allowMixTrans:Boolean,allowMixNote:Boolean,allowReversal:Boolean,allowPayPart:Boolean,allowTax:Boolean):Boolean
+			{
+				var listMain:Object = null; 
+				
+				if(listMain==null)
+					listMain = FINANCIAL_;
+				
+				//------------------------------------------------------------------------------------------------
+				checkDataList(false,true,true); //update data only
+				//------------------------------------------------------------------------------------------------
+				
+				var objDat:Object         = listMain.selectedItem;
+				var idxDat:int            = listMain.selectedIndex;
+				var itens:Vector.<Object> = listMain.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				if( objDat.MIX == 'FINANCIAL' && allowMixFin == false ){
+					new gnncAlert().__alert('Selecione outro item, <b>lançamentos financeiros</b> não são permitidos nesta operação.');
+					return false;
+				}
+				if( objDat.MIX == 'FINANCIAL_TRANS' && allowMixTrans == false ){
+					new gnncAlert().__alert('Não é possível essa operação em <b>transferências entre contas</b>.');
+					return false;
+				}
+				if( objDat.MIX == 'FINANCIAL_NOTE' && allowMixNote == false ){
+					new gnncAlert().__alert('Não é possível essa operação em <b>anotações</b>.');
+					return false;
+				}
+				if( Number(objDat.IS_REVERSAL)>0 && allowReversal == false ){
+					new gnncAlert().__alert('Não é possível essa operação em <b>lançamentos estornados</b>.');
+					return false;
+				}
+				if( Number(objDat.IS_PAY_PART)>0 && allowPayPart == false ){
+					new gnncAlert().__alert('Não é possível essa operação quando o lançamento é <b>parte de um pagamento</b>.');
+					return false;
+				}
+				if( Number(objDat.IS_TAX)>0 && allowTax == false ){
+					new gnncAlert().__alert('Não é possível essa operação em <b>lançamentos-taxa</b>.');
+					return false;
+				}
+				
+				return true;
+				
+			}			
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			
+			//CONSULTA SQL
+			
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			
+			private function panel(open:Boolean,effect:Boolean=true):void
+			{
+				if(!effect)
+					panelList_.setStyle('moveEffect',null);
+				else
+					panelList_.setStyle('moveEffect',movie);
+				
+				if(!open){
+					listPanelTitle_.text = 'Listagem';
+					listPanel_.dataProvider = new ArrayCollection();
+					FINANCIAL_.setFocus();
+				}
+				
+				panelList_.visible = true;
+				panelList_.right = open ? 0 : -610 ;
+				listPanel_.enabled = open;
+				panelButtons_.enabled = !open; 
+			}
+			
+			private function panelChange(open:Boolean,effect:Boolean=true):void
+			{
+				if(!effect)
+					panelChange_.setStyle('moveEffect',null);
+				else
+					panelChange_.setStyle('moveEffect',movie);
+				
+				if(!open){
+					//listPanelTitle_.text = 'Listagem';
+					//listPanel_.dataProvider = new ArrayCollection();
+					FINANCIAL_.setFocus();
+				}
+				
+				panelChange_.visible = true;
+				panelChange_.right = open ? 0 : -410 ;
+				//listPanel_.enabled = open;
+				//panelButtons_.enabled = !open; 
+			}
+			
+			private var timeLoading:gnncTime = new gnncTime();
+			private function loading(show:Boolean=true):void
+			{
+				if(show)
+					timeLoading.__start(45000,function(e:*=null):void{ loading(false) },1); //35000 = 35seg
+				else
+					timeLoading.__stop();
+				
+				FINANCIAL_.enabled           = !show;
+				listPanel_.enabled           = !show;
+				//panelButtons_.enabled      = !show;
+				//panelButtonsGetList_.enabled = !show;
+				buttonToday_.enabled         = !show;
+			}
+			
+			private function getColumns(prefix:String=null):Array
+			{
+				if(prefix)
+					prefix = prefix+'.';
+				else 
+					prefix = 'dbd_financial.';
+				
+				var columns:Array = [
+					prefix+"ID",
+					//prefix+"ID_KEY",
+					//prefix+"ID_FATHER,
+					prefix+"ID_PAY_PART",
+					prefix+"ID_CLIENT",
+					//prefix+"ID_CLIENT_SELLER,
+					prefix+"ID_PROJECT",
+					//prefix+"ID_CONTRACT,
+					prefix+"ID_FINANCIAL_ACCOUNT",
+					prefix+"ID_PRODUCT_STOCK_OS",
+					prefix+"IDS_REFERENCE",					
+					
+					prefix+"MIX",
+					prefix+"IS_TAX",
+					prefix+"IS_TRANS",
+					prefix+"IS_PAY_PART",
+					prefix+"IS_REVERSAL",
+					prefix+"IS_FIXED_COST",
+					
+					prefix+"NUMBER_LETTER",
+					prefix+"NUMBER",
+					prefix+"NUMBER_FINAL_PAY",
+					prefix+"DOCUMENT_NUMBER", //apenas para baixar fast/simple
+					prefix+"DOCUMENT_TYPE", //apenas para baixar fast/simple
+					prefix+"DOCUMENT_BANK", //apenas para relatório
+					prefix+"VALUE_IN",
+					prefix+"VALUE_OUT",
+					prefix+"VALUE_IN_PAY",
+					prefix+"VALUE_OUT_PAY",
+					prefix+"FLAG_CARD", //apenas para relatório
+					prefix+"PAY_TYPE",
+					
+					" CASE "+
+					" WHEN DATEDIFF(NOW(),"+prefix+"DATE_END) > 0 THEN "+
+					" ROUND(("+prefix+"VALUE_IN + "+prefix+"VALUE_OUT) * (1 + (("+prefix+"FINE_PERCENT/100)/"+prefix+"FINE_PERCENT_TIME) * DATEDIFF(NOW(),"+prefix+"DATE_END) )+("+prefix+"FINE_VALUE)+("+prefix+"FINE_VALUE_PERCENT/100*("+prefix+"VALUE_IN + "+prefix+"VALUE_OUT)),2) "+
+					" ELSE "+
+					" ROUND(("+prefix+"VALUE_IN + "+prefix+"VALUE_OUT)-"+prefix+"DISCOUNT_PUNCTUALITY,2) "+
+					" END as VALUE_FINAL",
+					
+					//prefix+"DISCOUNT_VALUE",
+					//prefix+"DISCOUNT_PERCENT",
+					
+					"DATEDIFF(NOW(),"+prefix+"DATE_END) as DATE_END_DIFF",
+					//"TIMESTAMPDIFF(MONTH,"+prefix+"DATE_END,NOW()) as DATE_MONTH_DIFF",
+					
+					prefix+"DISCOUNT_PERCENT",
+					
+					prefix+"DISCOUNT_PUNCTUALITY",
+					prefix+"FINE_VALUE", //apenas para baixar fast/simple
+					prefix+"FINE_VALUE_PERCENT", //apenas para baixar fast/simple
+					prefix+"FINE_PERCENT", //apenas para baixar fast/simple
+					prefix+"FINE_PERCENT_TIME",
+					
+					//prefix+"DISCOUNT_PAY",
+					//prefix+"FINE_PAY",
+					
+					prefix+"DESCRIPTION",
+					
+					//prefix+"DATE",
+					prefix+"DATE_START",
+					prefix+"DATE_END",
+					prefix+"DATE_FINAL",
+					//prefix+"DATE_FINAL_AUTO",
+					//prefix+"DATE_FINAL_FIXED",
+					prefix+"DATE_CANCELED",
+					//prefix+"DATE_PAY",
+					prefix+"KEY_FINANCIAL",//parcel
+					prefix+"ID_DEPARTAMENT",
+					prefix+"ID_GROUP",
+					//prefix+"ID_CATEGORY",
+					prefix+"ID_PRODUCT", //curso
+					prefix+"ACTIVE", //pendente
+					//prefix+"VISIBLE",
+					//prefix+"CONTROL",
+					"(select z.NAME 		from dbd_client z            where z.ID = "+prefix+"ID_CLIENT                      ) as NAME_CLIENT",
+					"(select z.NAME 		from dbd_group z             where z.ID = "+prefix+"ID_GROUP                       ) as NAME_GROUP",
+					"(select z.NAME 		from dbd_departament z       where z.ID = "+prefix+"ID_DEPARTAMENT                 ) as NAME_DEPARTAMENT",
+					"(select z.NAME 		from dbd_financial_account z where z.ID = "+prefix+"ID_FINANCIAL_ACCOUNT		   ) as NAME_FINANCIAL_ACCOUNT",
+					"(select COUNT(z.ID) 	from dbd_attach z            where z.MIX = 'FINANCIAL' AND z.ID_MIX = "+prefix+"ID ) as ROWS_ATTACH"//,
+					//"(select z.NUMBER_FINAL_PAY from dbd_financial z     where z.ID = "+prefix+"ID_PAY_PART limit 1            ) as THIS_IS_NUMBER_FINAL_PAY"
+				];
+				
+				return columns;
+			}
+			
+			private function getOrderBy(prefix:String=null):Array
+			{
+				if(prefix)
+					prefix = prefix+'.';
+				else 
+					prefix = 'dbd_financial.';
+				
+				//ORDER
+				var order:Array = new Array();
+				if(CORDER_ALL.selected){
+					
+					if(WDF_.selected == true){
+						order.push(prefix+'DATE_END asc');
+						order.push(prefix+'DATE_FINAL asc');
+						order.push(prefix+'ID');
+					}else{
+						order.push(prefix+'DATE_END asc');
+						order.push(prefix+'ID');
+					}
+					
+				}else if(CORDER_LAST.selected){
+					order.push(prefix+'ID');
+					CORDERASC_DESC.selected = true; //wtf?
+				}else if(CORDER_REGISTER.selected){
+					order.push(prefix+'NUMBER_LETTER');
+					order.push(prefix+'NUMBER');
+				}else if(CORDER_REGISTER_FINAL.selected){
+					order.push(prefix+'NUMBER_FINAL_PAY');
+				}else if(CORDER_PAY_TYPE.selected){
+					order.push(prefix+'PAY_TYPE');
+					order.push(prefix+'FLAG_CARD');
+					order.push(prefix+'DOCUMENTO_TYPE');
+				}else if(CORDER_FINAL.selected){
+					order.push(prefix+'DATE_FINAL');
+					order.push(prefix+'DATE_CANCELED');
+				}else if(CORDER_VALUE_IN.selected){
+					order.push(prefix+'VALUE_IN desc');
+					order.push(prefix+'VALUE_OUT');
+				}else if(CORDER_VALUE_OUT.selected){
+					order.push(prefix+'VALUE_OUT desc');
+					order.push(prefix+'VALUE_IN');
+				}else if(CORDER_financial_ACCOUNT.selected){
+					order.push(prefix+'ID_FINANCIAL_ACCOUNT');
+					order.push(prefix+'DATE_END');
+					order.push(prefix+'DATE_START');
+				}else if(CORDER_CLIENT.selected){
+					order.push('NAME_CLIENT asc');
+					order.push(prefix+'ID_CLIENT');
+					order.push(prefix+'DATE_END desc');
+					order.push(prefix+'DATE_START');
+				}
+				
+				return order;
+			}
+			
+			private function checkSameName(arrC:ArrayCollection):void
+			{
+				var len:uint = arrC.length;
+				
+				if(len==0)
+					return;
+				
+				var name:String = String(arrC.getItemAt(0).NAME_CLIENT);
+				
+				if(name.length < 7)
+					return;
+				
+				var isDiffName:Boolean = false;
+				
+				for(var i:uint=0;i<len;i++){
+					if(name === String(arrC.getItemAt(i).NAME_CLIENT))
+						continue;
+					else
+						isDiffName = true;
+				}
+				
+				listPanelTitle_.text = isDiffName ? 'Listagem' : gnncData.__firstLetterUpperCase(name) ;
+			}
+			
+			
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			
+			private function updateItemRender(ids:Array,keyFinancial:Array=null,idKey:Array=null):void
+			{
+				var objDat:Object         = FINANCIAL_.selectedItem;
+				var idxDat:int            = FINANCIAL_.selectedIndex;
+				var idxArr:int            = _financial.DATA_ARR.getItemIndex(objDat);
+				var itens:Vector.<Object> = FINANCIAL_.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				var idsB:Boolean = false; //id
+				var kefB:Boolean = false; //key_financial
+				var idkB:Boolean = false; //id_key
+				
+				var sqlArr:Array = new Array();
+				var sqlGer:String = '';
+				var sql1:String   = ''; //id
+				var sql2:String   = ''; //key_financial
+				var sql3:String   = ''; //id_key
+				
+				var connectionsTimes:int = 0;
+				var gnncScroll:gnncScrollPosition = new gnncScrollPosition();
+				
+				var order:String = ' order by f.ID asc '; 
+				
+				//--------------------------------------------------
+				if(ids){
+					if(ids.length>0){
+						if(String(ids[0])!=''){
+							idsB = true; 
+							connectionsTimes++; 
+						}
+					}
+				}
+				if(keyFinancial){
+					if(keyFinancial.length>0){
+						if(String(keyFinancial[0])!=''){
+							kefB = true; 
+							connectionsTimes++; 
+						}
+					}
+				}
+				if(idKey){
+					if(idKey.length>0){
+						if(String(idKey[0])!=''){
+							idkB = true; 
+							connectionsTimes++; 
+						}
+					}
+				}
+				//--------------------------------------------------
+				//motivo: não adianta atualizar os dados de ids, pois só trará a listagem do keyFinancial
+				//--------------------------------------------------
+				if(idsB && kefB){
+					idsB = false; 
+					connectionsTimes = connectionsTimes-1; 
+				}
+				if(idkB && kefB){
+					idkB = false; 
+					connectionsTimes = connectionsTimes-1; 
+				}
+				//--------------------------------------------------
+				
+				if(idsB){
+					sql1 = " select " + getColumns('f').join(',') + 
+						" from dbd_financial f where " +
+						" f.ID IN (" + ids.join(',') + ") " + order;
+					sqlArr.push(sql1);
+				}
+				if(kefB){
+					sql2 = " select " + getColumns('f').join(',') + 
+						" from dbd_financial f where " +
+						" f.KEY_FINANCIAL IN ('" + keyFinancial.join("','") + "') " + order;
+					sqlArr.push(sql2);
+				}
+				if(idkB){
+					sql3 = " select " + getColumns('f').join(',') + 
+						" from dbd_financial f where " +
+						" f.ID_KEY IN ('" + idKey.join("','") + "') " + order;
+					sqlArr.push(sql3);
+				}
+				
+				sqlGer = sqlArr.join(' UNION ALL ') + order ;
+				
+				if(connectionsTimes>0){
+					loading(true);
+					panel(false);
+				}
+				
+				//_connExec.__clear();
+				//_connExec.__sql(sqlGer,'','',__fResult,__fFault);
+				
+				gnncGlobalLog.__add(connectionsTimes,'connTimes');
+				
+				if(idsB)
+					connExec11.__sql(sql1,'','',__fResult_1,__fFault);
+				if(kefB)
+					connExec12.__sql(sql2,'','',__fResult_2,__fFault);
+				if(idkB)
+					connExec13.__sql(sql3,'','',__fResult_3,__fFault);
+				
+				gnncScroll.__getListValues(FINANCIAL_,true);
+				
+				//atualiza os ids, normalmente os que estão selecionados;
+				function __fResult_1(e:*):void
+				{
+					gnncGlobalLog.__add(connectionsTimes,'connTimes1');
+					if(connExec11.DATA_ROWS==0){
+						connectionsTimes = connectionsTimes-1;
+						if(connectionsTimes<1)
+							loading(false);
+						return;
+					}
+					var i:uint = 0;
+					var idx:int = -1;
+					var oId:uint = 0;
+					var o:Object = new Object();
+					var arr:Array = gnncDataVector.__vector2Array(itens);
+					var arC:ArrayCollection = new ArrayCollection(FINANCIAL_.dataProvider.toArray());
+					var naC:ArrayCollection = new ArrayCollection();
+					var totalUpdate:uint = 0;
+					
+					if(itensCount>1)
+					{
+						gnncGlobalLog.__add('updatesRows:'+itensCount);
+						//atualizar itens selecionados
+						for(i=0;i<itensCount;i++)
+						{
+							//transforma o primeiro vetor selecionado em objeto
+							o = arr[i] as Object;
+							//captura o id do objeto
+							oId = o.ID;
+							//pega o index dele na listagem principal, FINANCIAL_, onde foram selecionados os lançamentos manualmente
+							idx = arC.getItemIndex(o);
+							//filtra os elementos com o mesmo id
+							naC = new gnncDataArrayCollection().__filterNumeric(connExec11.DATA_ARR,'ID',oId);
+							
+							if(naC.length==1 && idx>-1){
+								//posiciona o index e joga na lista
+								o = naC.getItemAt(0);
+								FINANCIAL_.dataProvider.setItemAt(o,idx);
+								_financial.DATA_ARR.setItemAt(o,idx);
+								totalUpdate++;
+							}else if(naC.length==0){
+								//erro - add na lista (nao encontrol o id)
+							}else {}
+						}
+						//se não encontrar na lista add no final
+						if(totalUpdate != itensCount){
+							for(i=0;i<connExec11.DATA_ROWS;i++)
+							{
+								o = connExec11.DATA_ARR.getItemAt(i);
+								oId = o.ID;
+								naC = new gnncDataArrayCollection().__filterNumeric(connExec11.DATA_ARR,'ID',oId);
+								if(naC.length==0){
+									FINANCIAL_.dataProvider.addItem(o);
+									_financial.DATA_ARR.addItem(o);
+								}								
+								
+							}
+						}
+						_financial.DATA_ARR.refresh();
+					}
+					else
+					{
+						o = connExec11.DATA_ARR.getItemAt(0);
+						FINANCIAL_.dataProvider.setItemAt(o,idxDat);
+						//update
+						_financial.DATA_ARR = new ArrayCollection(FINANCIAL_.dataProvider.toArray());
+						_financial.DATA_ARR.refresh();
+					}						
+					
+					gnncScroll.__setListValues(FINANCIAL_);
+					
+					connectionsTimes = connectionsTimes-1;
+					if(connectionsTimes<1)
+						loading(false);
+				}
+				
+				//insere na listagem secundária as parcelas agrupadas
+				function __fResult_2(e:*):void
+				{
+					gnncGlobalLog.__add(connectionsTimes,'connTimes2');
+					if(connExec12.DATA_ROWS==0){
+						connectionsTimes = connectionsTimes-1;
+						if(connectionsTimes<1)
+							loading(false);
+						return;
+					}
+					var i:uint = 0;
+					
+					/*
+					panel(false,false);
+					listPanel_.dataProvider = connExec12.DATA_ARR;
+					panel(true,true);
+					*/
+					FINANCIAL_.dataProvider = connExec12.DATA_ARR;
+					_financial.DATA_ARR     = connExec12.DATA_ARR;
+					_financial.DATA_ARR.refresh();
+					
+					/*
+					for(i=0;i<_connExec.DATA_ROWS;i++)
+					FINANCIAL_.dataProvider.addItem(connExec12.DATA_ARR.getItemAt(i));
+					
+					_financial.DATA_ARR = new ArrayCollection(FINANCIAL_.dataProvider.toArray());
+					_financial.DATA_ARR.refresh();
+					
+					//_financial.DATA_ARR.addAll(connExec12.DATA_ARR);
+					//_financial.DATA_ARR.refresh();
+					*/
+					
+					gnncScrollPosition.__setEnd(FINANCIAL_);
+					
+					connectionsTimes = connectionsTimes-1;
+					if(connectionsTimes<1)
+						loading(false);
+				}
+				
+				//adiciona no final da linha o que foi gravado no banco
+				function __fResult_3(e:*):void
+				{
+					gnncGlobalLog.__add(connectionsTimes,'connTimes3');
+					if(connExec13.DATA_ROWS==0){
+						connectionsTimes = connectionsTimes-1;
+						if(connectionsTimes<1)
+							loading(false);
+						return;
+					}
+					var i:uint = 0;
+					
+					for(i=0;i<connExec13.DATA_ROWS;i++)
+						FINANCIAL_.dataProvider.addItem(connExec13.DATA_ARR.getItemAt(i));
+					
+					_financial.DATA_ARR = new ArrayCollection(FINANCIAL_.dataProvider.toArray());
+					_financial.DATA_ARR.refresh();
+					
+					//_financial.DATA_ARR.addAll(_connExec.DATA_ARR);
+					//_financial.DATA_ARR.refresh();
+					
+					gnncScrollPosition.__setEnd(FINANCIAL_);
+					
+					connectionsTimes = connectionsTimes-1;
+					if(connectionsTimes<1)
+						loading(false);
+				}
+				
+				function __fFault(e:*):void
+				{
+					connectionsTimes = connectionsTimes-1;
+					if(connectionsTimes==0)
+						loading(false);
+				}
+			}
+			
+			//atrasados
+			private function __financialListNoFinalOld(dateFrom__:Date=null,getNoFinal_:Boolean=true,getActive_:String=''):void
+			{
+				if(!_idAccount && _AllAccounts==false){
+					__setAccount();
+					return;
+				}
+				__clearMultiSelect();
+				
+				var dateFrom_:Date = (!dateFrom__)?_today:dateFrom__;
+				var _financialAccout:String = '';
+				var _course:String = '';
+				
+				var getAccount:String = gnncData.__replace(gnncPermissionSet.__get('FINANCIAL_ACCOUNT'),'ID ',' f.ID_financial_ACCOUNT ');
+				if(_idAccount)
+					_financialAccout = " AND f.ID_FINANCIAL_ACCOUNT = '"+_idAccount+"' ";
+				else if(getAccount)
+					getAccount = ' AND '+getAccount;
+				
+				if( idCourse!= 0 )
+					_course = " AND f.ID_PROJECT = '"+idCourse+"' ";
+				
+				
+				var _sql:String = " select " + getColumns('f').join(',') +
+					" from dbd_financial f " +
+					" where " +
+					((!getNoFinal_)?"":" (f.DATE_FINAL < 1 AND f.DATE_CANCELED < 1 AND f.MIX <> 'FINANCIAL_NOTE' AND f.DATE_END <= '"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+dateFrom_.date+" 23:59:59' AND f.DATE_START <= '"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+(dateFrom_.date)+" 23:59:59' "+_financialAccout+") ") + 
+					((!getActive_)?"":(!getNoFinal_?"":" AND ")+" (f.ACTIVE = "+getActive_+") ") + getAccount + _course
+				" order by "+getOrderBy('f').join(','); 
+				
+				loading(true);
+				panel(false);
+				_financial.__sql(_sql,'','',__fResult,__fFault);
+				
+				function __fResult(e:*):void
+				{
+					FINANCIAL_.dataProvider = _financial.DATA_ARR;
+					loading(false);
+				}
+				
+				function __fFault(e:*):void{
+					loading(false);
+				}
+			}
+			
+			/** Contas a pagar ou receber **/
+			private function __financialLate(safeIn_:Boolean,safeOut_:Boolean):void
+			{
+				if(!_idAccount && _AllAccounts==false){
+					__setAccount();
+					return;
+				}
+				__clearMultiSelect();
+				
+				var _dateEnd:String = '';
+				var _value:String = '';
+				
+				if(safeIn_ && !safeOut_)
+					_value = " f.VALUE_IN > 0 AND f.VALUE_IN_PAY = 0 AND ";
+				else if(!safeIn_ && safeOut_)
+					_value = " f.VALUE_OUT > 0 AND f.VALUE_OUT_PAY = 0 AND ";
+				else
+					_value = " ";
+				
+				if(SEARCH_PAY.selectedValue>-1)
+				{
+					if(SEARCH_PAY.selectedValue == 3 || SEARCH_PAY.selectedValue == 4)
+					{
+						var _moreWeekPlus:uint = SEARCH_PAY.selectedValue==4?7:0;//uma semana a mais caso precise, ou seja, proxima semana
+						var num:uint  = DateUtils.dayOfWeek(_today); 
+						num = !num?num:num-1;// este -1 é para começar na segunda e terminar no domingo
+						var dat1:Date = DateUtils.dateAdd(DateUtils.DAY_OF_MONTH,(num*-1)+_moreWeekPlus,_today);
+						var dat2:Date = DateUtils.dateAdd(DateUtils.DAY_OF_MONTH,6,dat1);
+					}
+					
+					switch(SEARCH_PAY.selectedValue)
+					{
+						case 0: 
+							_dateEnd = " f.DATE_END <= '"+_year+"-"+gnncDataNumber.__setZero(_month+1)+"-31 24:00:00' "; 
+							period_.text = "PERÍODO ("+String(gnncGlobalArrays._MONTH.getItemAt(_month).label).toUpperCase()+" E PASSADO)";
+							break;
+						case 1: 
+							_dateEnd = " f.DATE_END >= '"+_year+"-"+gnncDataNumber.__setZero(_month+1)+"-01 00:00:00' AND f.DATE_END <= '"+_year+"-"+gnncDataNumber.__setZero(_month+1)+"-31 24:00:00' ";
+							period_.text = "PERÍODO ("+String(gnncGlobalArrays._MONTH.getItemAt(_month).label).toUpperCase()+")";
+							break;
+						case 2: 
+							_dateEnd = " f.DATE_END >= '"+_year+"-"+gnncDataNumber.__setZero(_month+2)+"-01 00:00:00' AND f.DATE_END <= '"+_year+"-"+gnncDataNumber.__setZero(_month+2)+"-31 24:00:00' ";
+							period_.text = "PERÍODO ("+String(gnncGlobalArrays._MONTH.getItemAt(_month+1).label).toUpperCase()+")";
+							break;
+						case 3: 
+						case 4: 
+							_dateEnd = " f.DATE_END >= '"+gnncDate.__date2String(dat1,false)+" 00:00:00' AND f.DATE_END <= '"+gnncDate.__date2String(dat2,false)+" 00:00:00' ";
+							period_.text = "PERÍODO ("+gnncData.__trimText(String(gnncDate.__date2Legend('',dat1,true,false,'',true)).toUpperCase())+" A "+gnncData.__trimText(String(gnncDate.__date2Legend('',dat2,true,false,'',true)).toUpperCase())+")";
+							break;
+						case 5: 
+							_dateEnd = " left(f.DATE_END,10) like left('"+gnncDate.__date2String(_today)+"',10) ";
+							period_.text = "PERÍODO (HOJE)"; 
+							break;
+						case 6: 
+							_dateEnd = " left(f.DATE_END,10) like left('"+gnncDate.__date2String(DateUtils.dateAdd(DateUtils.DAY_OF_MONTH,1,_today))+"',10) ";
+							period_.text = "PERÍODO (AMANHÃ)";
+							break;
+						case 7: 
+							_dateEnd = " LEFT(f.DATE_END,7) <= LEFT('"+_year+"-"+gnncDataNumber.__setZero(_month)+"-00',7) "; 
+							period_.text = "PERÍODO ("+String(gnncGlobalArrays._MONTH.getItemAt(_month).label).toUpperCase()+" E PASSADO)";
+							break;
+					}
+				}
+				
+				if( idCourse!= 0 )
+					_value += " AND f.ID_PROJECT = '"+idCourse+"' ";
+				
+				var getAccount:String = gnncData.__replace(gnncPermissionSet.__get('FINANCIAL_ACCOUNT'),'ID ',' f.ID_financial_ACCOUNT ');
+				if(getAccount)
+					getAccount = ' AND '+getAccount;
+				
+				var _sql:String = " select " + getColumns('f').join(',') +
+					" from dbd_financial f " +
+					" where " +
+					_value +
+					" f.DATE_FINAL < 1 AND f.DATE_CANCELED < 1 AND f.DATE_PAY < 1 "+getAccount+' AND '+_dateEnd+" order by "+getOrderBy('f').join(',');
+				
+				loading(true);
+				panel(false);
+				_financial.__sql(_sql,'','',__fResult,__fFault);
+				
+				function __fResult(e:*):void
+				{
+					FINANCIAL_.dataProvider = _financial.DATA_ARR;
+					loading(false);
+				}
+				
+				function __fFault(e:*):void
+				{
+					loading(false);
+				}
+				
+			}
+			
+			//consulta normal e consulta avançada
+			private function __financialList(dateFrom_:Date=null,dateTo_:Date=null,searchAdvanced_:Boolean=false):void
+			{
+				if(!_idAccount && _AllAccounts==false){
+					__setAccount();
+					return;
+				}
+				__clearMultiSelect();
+				FINANCIAL_.setFocus();
+				
+				var WHERE:Array = new Array();
+				
+				var _dateWork:String = WDD_.selected == true ? 'DATE' : WDF_.selected == true ? 'DATE_FINAL' : WDE_.selected == true ? 'DATE_END' /*: WEF_.selected == true ? 'DATE_ENDFINAL'*/ : WEorF_.selected == true ? 'DATE_ENDORFINAL' : 'DATE' ;
+				__workDateValidade();
+				
+				if(searchAdvanced_)
+				{
+					if(FINANCIAL_ACCOUNT_.selectedIndex>-1)
+						WHERE.push(" ID_FINANCIAL_ACCOUNT   = 	'"+FINANCIAL_ACCOUNT_.selectedItem.ID+"' ");
+					if(DEPARTAMENT_.value)
+						WHERE.push(" ID_DEPARTAMENT 		= 	'"+DEPARTAMENT_.value+"' ");
+					if(CATEGORY_.value)
+						WHERE.push(" ID_CATEGORY 			= 	'"+CATEGORY_.value+"' ");
+					if(CLIENT_.value)
+						WHERE.push(" ID_CLIENT 				= 	'"+CLIENT_.value+"' ");
+					if(FINANCIAL_IN_.value)
+						WHERE.push(" ID_GROUP 				= 	'"+FINANCIAL_IN_.value+"' ");
+					if(FINANCIAL_OUT_.value)
+						WHERE.push(" ID_GROUP 				= 	'"+FINANCIAL_OUT_.value+"' ");
+					if(DOCUMENT_TYPE_.selectedIndex>-1)
+						WHERE.push(" DOCUMENT_TYPE 			= 	'"+DOCUMENT_TYPE_.selectedItem.data+"' ");
+					if(PAY_TYPE_.selectedIndex>-1)
+						WHERE.push(" PAY_TYPE 				= 	'"+PAY_TYPE_.selectedItem.data+"' ");
+					
+					
+					var word:String = WORD_.text;
+					var wordGroup:Array = new Array();
+					wordGroup = word.split(',');
+					if(word)
+					{
+						word = word
+							.replace("insert",'')
+							.replace("delete",'')
+							.replace("update",'')
+							.replace("show",'')
+							.replace("select",'')
+							.replace('%','')
+							.replace(';','')
+							.replace('"','')
+							.replace("'",'')
+							.replace("´",'')
+							.replace("`",'');
+						
+						//gnncAlert.__alert(word+'!');
+						
+						if(wordGroup.length == 1) {
+							var w:Array = new Array();
+							if(gnncData.__isNumeric(word)){
+								w.push(" ID = '"+word+"' ");
+								w.push(" NUMBER = '"+word+"' ");
+								w.push(" NUMBER_FINAL_PAY = '"+word+"' ");
+								w.push(" DOCUMENT_NUMBER like '%"+word+"%' ");
+								w.push(" DESCRIPTION like '%"+word+"%' ");								
+							}
+							else{
+								w.push(" DESCRIPTION like '%"+word+"%' ");								
+							}
+							WHERE.push(" ( "+w.join(" OR ")+" ) ");
+						} else if(wordGroup.length > 1) {
+							//for(var i:uint=0;i<wordGroup.length;i++){
+							WHERE.push("(  " +
+								"ID 				IN ('"+word+"') OR " +
+								"NUMBER 			IN ('"+word+"') OR " +
+								"IDS_REFERENCE 	    like '%"+word+"%' OR " +
+								"NUMBER_FINAL_PAY 	IN ('"+word+"') " +
+								") ");
+							//}
+						}
+					}
+					
+					if( idCourse!= 0 )
+						WHERE.push(" ID_PROJECT = '"+idCourse+"' ");
+					
+					var vmin:Number = gnncDataNumber.__safeClear(VALUE_MIN_.text);
+					var vmax:Number = gnncDataNumber.__safeClear(VALUE_MAX_.text);				
+					if( vmin || vmax )
+						WHERE.push('{{maxmin}}');
+					
+					AD_.text    = 'Pesquisa Avançada';
+					AD_.visible = true;
+				}
+				else //no advanced
+				{
+					AD_.text    = '';
+					AD_.visible = false;
+					
+					if(_idAccount)
+						WHERE.push(" ID_FINANCIAL_ACCOUNT = '"+_idAccount+"' ");
+				}
+				
+				//DATE FINAL
+				if(CDATE_ALL.selected){
+					//none
+				}else if(CDATE_FINAL_NO.selected){
+					WHERE.push(" DATE_FINAL 	like 	'0000-00-00 00:00:00' ");
+					WHERE.push(" DATE_CANCELED 	like 	'0000-00-00 00:00:00' ");
+				}else if(CDATE_FINAL.selected){
+					WHERE.push(" DATE_FINAL 	<> 		'0000-00-00 00:00:00' ");
+					WHERE.push(" DATE_CANCELED 	like 	'0000-00-00 00:00:00' ");
+				}else if(CDATE_CANCELED.selected){
+					WHERE.push(" DATE_CANCELED 	<> 		'0000-00-00 00:00:00' ");
+					WHERE.push(" DATE_FINAL 	like 	'0000-00-00 00:00:00' ");
+				}else if(IS_REVERSAL.selected){
+					WHERE.push(" IS_REVERSAL = '1' ");
+				}
+				
+				//SAFE
+				if(CSAFE_ALL.selected){
+					//none
+				}else if(CSAFE_IN.selected){
+					WHERE.push(" VALUE_IN > 0 ");
+				}else if(CSAFE_OUT.selected){	
+					WHERE.push(" VALUE_OUT > 0 ");
+				}else if(CSAFE_TRANS.selected){	
+					WHERE.push(" MIX = 'FINANCIAL_TRANS' ");
+				}else if(CSAFE_NOTE.selected){	
+					WHERE.push(" MIX = 'FINANCIAL_NOTE' ");
+				}else if(CSAFE_URGENT.selected){	
+					WHERE.push(" ACTIVE = '1' ");
+				}
+				
+				//DATE_END_FINAL
+				if(dateFrom_ == null && dateTo_ == null){
+					//WHERE.push(" "+_dateWork+" >= '"+_year+"-"+gnncDataNumber.__setZero(_month+1)+"-"+gnncDataNumber.__setZero(salesRangeDays_.values[0])+" 00:00:00' AND "+_dateWork+" <= '"+_year+"-"+gnncDataNumber.__setZero(_month+1)+"-"+gnncDataNumber.__setZero(salesRangeDays_.values[1])+" 23:59:59' ");
+					if(/*WEF_.selected==true || */WEorF_.selected==true)
+						WHERE.push(
+							" ( "+
+							" ( DATE_FINAL >= '"+_year+"-"+gnncDataNumber.__setZero(_month+1)+"-"+gnncDataNumber.__setZero(salesRangeDays_.values[0])+" 00:00:00' AND DATE_FINAL <= '"+_year+"-"+gnncDataNumber.__setZero(_month+1)+"-"+gnncDataNumber.__setZero(salesRangeDays_.values[1])+" 23:59:59') " +
+							//" "+(WEF_.selected==true?"AND":"OR") +
+							" "+" OR " +
+							" ( DATE_END   >= '"+_year+"-"+gnncDataNumber.__setZero(_month+1)+"-"+gnncDataNumber.__setZero(salesRangeDays_.values[0])+" 00:00:00' AND DATE_END   <= '"+_year+"-"+gnncDataNumber.__setZero(_month+1)+"-"+gnncDataNumber.__setZero(salesRangeDays_.values[1])+" 23:59:59') " +
+							" ) "
+						);
+					else
+						WHERE.push(" "+_dateWork+" >= '"+_year+"-"+gnncDataNumber.__setZero(_month+1)+"-"+gnncDataNumber.__setZero(salesRangeDays_.values[0])+" 00:00:00' AND "+_dateWork+" <= '"+_year+"-"+gnncDataNumber.__setZero(_month+1)+"-"+gnncDataNumber.__setZero(salesRangeDays_.values[1])+" 23:59:59' ");
+				}else if(dateFrom_ && dateTo_){
+					//WHERE.push(" "+_dateWork+" >= '"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+dateFrom_.date+" 00:00:00' AND "+_dateWork+" <= '"+dateTo_.fullYear+"-"+gnncDataNumber.__setZero(dateTo_.month+1)+"-"+dateTo_.date+" 23:59:59' ");
+					if(/*WEF_.selected==true || */WEorF_.selected==true)
+						WHERE.push(
+							" ( "+
+							" ( DATE_FINAL >= '"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+dateFrom_.date+" 00:00:00' AND DATE_FINAL <= '"+dateTo_.fullYear+"-"+gnncDataNumber.__setZero(dateTo_.month+1)+"-"+dateTo_.date+" 23:59:59') " +
+							//" "+(WEF_.selected==true?"AND":"OR") +
+							" "+" OR " +
+							" ( DATE_END   >= '"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+dateFrom_.date+" 00:00:00' AND DATE_END <= '"+dateTo_.fullYear+"-"+gnncDataNumber.__setZero(dateTo_.month+1)+"-"+dateTo_.date+" 23:59:59') " +
+							" ) "
+						);
+					else
+						WHERE.push(" "+_dateWork+" >= '"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+dateFrom_.date+" 00:00:00' AND "+_dateWork+" <= '"+dateTo_.fullYear+"-"+gnncDataNumber.__setZero(dateTo_.month+1)+"-"+dateTo_.date+" 23:59:59' ");
+				}else if(dateFrom_){
+					//WHERE.push(" "+_dateWork+" >= '"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+dateFrom_.date+" 00:00:00' AND "+_dateWork+" <= '"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+(dateFrom_.date)+" 23:59:59' ");
+					if(/*WEF_.selected==true || */WEorF_.selected==true)
+						WHERE.push(
+							" ( "+
+							" ( DATE_FINAL >= '"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+dateFrom_.date+" 00:00:00' AND DATE_FINAL <= '"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+(dateFrom_.date)+" 23:59:59') " +
+							//" "+(WEF_.selected==true?"AND":"OR") +
+							" "+" OR " +
+							" ( DATE_END   >= '"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+dateFrom_.date+" 00:00:00' AND DATE_END <= '"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+(dateFrom_.date)+" 23:59:59') " +
+							" ) "
+						);
+					else
+						WHERE.push(" "+_dateWork+" >= '"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+dateFrom_.date+" 00:00:00' AND "+_dateWork+" <= '"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+(dateFrom_.date)+" 23:59:59' ");
+				}
+				
+				var getAccount:String = gnncData.__replace(gnncPermissionSet.__get('FINANCIAL_ACCOUNT'),'ID ',' ID_FINANCIAL_ACCOUNT ');
+				if(getAccount)
+					WHERE.push(getAccount);
+				
+				if(!WHERE.length)
+					WHERE = null;
+				
+				var columns:Array = getColumns();
+				var sql:String = new gnncSql().__SELECT(new table_financial(),false,columns,null,null,WHERE,null,getOrderBy(),CORDERASC_DESC.selected?true:false);
+				
+				//------------------------------------------------------------------------------------------------------------------------------
+				//------------------------------------------------------------------------------------------------------------------------------
+				//------------------------------------------------------------------------------------------------------------------------------
+				//----------------------------------------------------------------------------- sobre pesquisa avançada de valores MIN e MAX
+				var maxmin:String = '';
+				/*
+				
+				IF(`email` != '', `email`, `email2`) LIKE  '%@domain.nl%'
+				where 
+				(
+				case 
+				when email is NULL or email = '' then email2 
+				when email is NULL or email = '' then email2 
+				else email 
+				end 
+				) like '%anja@fiskkoer.nl%'
+				
+				*/
+				
+				if( vmin>0 && vmax>0 )//min and max
+				{
+					//maxmin = " (( VALUE_IN  >= "+vmin+" AND VALUE_IN  <= "+vmax+" ) OR ( VALUE_IN_PAY  >= "+vmin+" AND VALUE_IN_PAY  <= "+vmax+" ) AND ";
+					//maxmin += " ( VALUE_OUT >= "+vmin+" AND VALUE_OUT <= "+vmax+" ) OR ( VALUE_OUT_PAY >= "+vmin+" AND VALUE_OUT_PAY <= "+vmax+" )) ";
+					
+					maxmin += "  ";
+					maxmin += " case ";
+					maxmin += "   when VALUE_IN > 0 then "; //receita
+					maxmin += "     IF(DATE_FINAL > 1, VALUE_IN_PAY, VALUE_IN)   >= "+vmin+" AND IF(DATE_FINAL > 1, VALUE_IN_PAY, VALUE_IN)   <= "+vmax+" ";
+					maxmin += "   when VALUE_OUT > 0 then "; //despesa
+					maxmin += "     IF(DATE_FINAL > 1, VALUE_OUT_PAY, VALUE_OUT) >= "+vmin+" AND IF(DATE_FINAL > 1, VALUE_OUT_PAY, VALUE_OUT) <= "+vmax+" ";
+					maxmin += " end ";
+					maxmin += "  ";
+					
+				}
+				else if( vmin>0 && !vmax )//min
+				{
+					//maxmin = " ( VALUE_IN >= "+vmin+" OR VALUE_IN_PAY >= "+vmin+" OR VALUE_OUT >= "+vmin+" OR VALUE_OUT_PAY >= "+vmin+" ) ";
+					//maxmin = " ( VALUE_IN >= "+vmin+" OR VALUE_OUT >= "+vmin+" ) ";
+					
+					maxmin += "  ";
+					maxmin += " case ";
+					maxmin += "   when VALUE_IN > 0 then "; //receita
+					maxmin += "     IF(DATE_FINAL > 1, VALUE_IN_PAY, VALUE_IN) >= "+vmin+" "; //if FINAL ou ABERTO
+					maxmin += "   when VALUE_OUT > 0 then "; //despesa
+					maxmin += "     IF(DATE_FINAL > 1, VALUE_OUT_PAY, VALUE_OUT) >= "+vmin+" "; //if FINAL ou ABERTO
+					maxmin += " end ";
+					maxmin += "  ";
+					
+				}
+				else if( !vmin && vmax )//max
+				{
+					//maxmin = " ( VALUE_IN <= "+vmax+" AND VALUE_IN_PAY <= "+vmax+" AND VALUE_OUT <= "+vmax+" AND VALUE_OUT_PAY <= "+vmax+" ) ";
+					//maxmin = " ( VALUE_IN <= "+vmax+" AND VALUE_OUT <= "+vmax+" ) ";
+					
+					maxmin += "  ";
+					maxmin += " case ";
+					maxmin += "   when VALUE_IN > 0 then "; //receita
+					maxmin += "     IF(DATE_FINAL > 1, VALUE_IN_PAY, VALUE_IN) <= "+vmax+" "; //if FINAL ou ABERTO
+					maxmin += "   when VALUE_OUT > 0 then "; //despesa
+					maxmin += "     IF(DATE_FINAL > 1, VALUE_OUT_PAY, VALUE_OUT) <= "+vmax+" "; //if FINAL ou ABERTO
+					maxmin += " end ";
+					maxmin += "  ";
+				}
+				else
+				{
+					maxmin = '';
+				}
+				
+				sql = gnncData.__replace(sql,'{{maxmin}}',maxmin);
+				
+				loading(true);
+				panel(false);
+				_financial.__sql(sql,'','',__fResult,__fFault);
+				
+				__workDateValidade();
+				
+				function __fResult(e:*):void
+				{
+					FINANCIAL_.dataProvider = _financial.DATA_ARR;
+					loading(false);
+				}
+				
+				function __fFault(e:*):void
+				{
+					loading(false);
+				}
+				
+			}			
+			//parcelas
+			private function __listFinancialParcel(e:*=null):void
+			{
+				if(!checkDataList(false,true,true))
+					return;
+				
+				var objDat:Object         = FINANCIAL_.selectedItem;
+				var idxDat:int            = FINANCIAL_.selectedIndex;
+				var idxArr:int            = _financial.DATA_ARR.getItemIndex(objDat);
+				var itens:Vector.<Object> = FINANCIAL_.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				var _sql:String	= " select "+getColumns('f').join(',')+" from dbd_financial f where f.KEY_FINANCIAL = '"+objDat.KEY_FINANCIAL+"' order by f.NUMBER asc ";
+				
+				panel(false,false);
+				loading(true);
+				_connExec.__clear();
+				_connExec.__sql(_sql,'','',__fResult,__fFault);
+				
+				function __fResult(e:*):void
+				{
+					//FINANCIAL_.dataProvider = _financial.DATA_ARR;
+					listPanel_.dataProvider = _connExec.DATA_ARR;
+					checkSameName(_connExec.DATA_ARR);
+					panel(true,true);
+					loading(false);
+				}
+				
+				function __fFault(e:*):void{
+					loading(false);
+				}
+			}
+			
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			
+			private function refreshData():void
+			{
+				if(!_idAccount && _AllAccounts==false){
+					__setAccount();
+					return;
+				}
+				loading(true);
+				__clearMultiSelect();
+				FINANCIAL_.setFocus();
+				_financial.__sqlRefresh();
+				callLater(function(e:*=null):void{ loading(false) });
+			}
+			
+			private function __workDate(e:MouseEvent):void
+			{
+				
+				
+				if(Object(WDE_)==Object(e.currentTarget)){
+					CORDER_ALL.selected = true;//Data de Vencimento (Normal)
+				}else if(Object(WDF_)==Object(e.currentTarget)){
+					CORDER_FINAL.selected = true;//Data de Pagamento,Cancelado,...
+					//CORDER_REGISTER_FINAL.selected = true;//Order Final
+				}	
+				
+				WDF_.selected = WDE_.selected = WDD_.selected = /*WEF_.selected = */ WEorF_.selected = false;
+				__workDateValidade();
+				Object(e.currentTarget).selected = true;
+				__workDateValidade();
+			}
+			
+			private function __workDateValidade():void
+			{
+				callLater(function():void{
+					WDF_  .validateDisplayList();
+					WDF_  .validateNow();
+					WDF_  .validateProperties();
+					WDE_  .validateDisplayList();
+					WDE_  .validateNow();
+					WDE_  .validateProperties();
+					WDD_  .validateDisplayList();
+					WDD_  .validateNow();
+					WDD_  .validateProperties();
+					//WEF_  .validateDisplayList();
+					//WEF_  .validateNow();
+					//WEF_  .validateProperties();
+					WEorF_.validateDisplayList();
+					WEorF_.validateNow();
+					WEorF_.validateProperties();
+				});
+			}
+			
+			private function btnAllowMultiSelect():void
+			{
+				btnView_.enabled     = false;
+				btnAttach_.enabled   = false;
+				btnEdit_.enabled     = false;
+				btnDel_.enabled      = true;
+				
+				btnFinal_.enabled    = false;
+				btnNoFinal_.enabled  = false;
+				btnCancel_.enabled   = false;
+				btnAlert_.enabled    = false;
+				
+				btnReceipt_.enabled  = false;
+			}
+			
+			private function btnAllowOneSelect():void
+			{
+				btnView_.enabled     = true;
+				btnAttach_.enabled   = true;
+				btnEdit_.enabled     = true;
+				btnDel_.enabled      = true;
+				
+				btnFinal_.enabled    = true;
+				btnNoFinal_.enabled  = true;
+				btnCancel_.enabled   = true;
+				btnAlert_.enabled    = true;
+				
+				btnReceipt_.enabled  = true;
+			}
+			
+			private function __clearMultiSelect():void
+			{
+				DS_.text = 
+					VI_.text = VO_.text = VS_.text = VR_.text = 
+					VIopen_.text = VOopen_.text = VRopen_.text = VSopen_.text = '';
+				FINANCIAL_.selectedIndex = -2;
+			}
+			
+			private function __multiSelect():void
+			{
+				if(FINANCIAL_.dataProvider.length==0){
+					__clearMultiSelect();
+					return;
+				}
+				
+				var objDat:Object         = FINANCIAL_.selectedItem;
+				var idxDat:int            = FINANCIAL_.selectedIndex;
+				var idxArr:int            = _financial.DATA_ARR.getItemIndex(objDat);
+				var itens:Vector.<Object> = FINANCIAL_.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				var multi:Boolean = itensCount > 1 ? true : false ;
+				
+				var value_in:Number  = 0;
+				var value_out:Number = 0;
+				var value_in_open:Number  = 0;
+				var value_out_open:Number = 0;
+				var o:Object;
+				
+				if(itensCount==0){
+					__clearMultiSelect();
+					return;
+				}
+				
+				function itemList(i_:uint=0):void
+				{
+					o = itens[i_];
+					if( Number(o.VALUE_IN_PAY ) > 0.00001 || Number(o.VALUE_OUT_PAY ) > 0.00001 ){
+						value_in       = Number( value_in  + Number(o.VALUE_IN_PAY  ));
+						value_out      = Number( value_out + Number(o.VALUE_OUT_PAY ));
+					}else{
+						value_in_open  = Number( value_in_open  + (Number(o.VALUE_IN  )>0?Number(o.VALUE_FINAL ):0));
+						value_out_open = Number( value_out_open + (Number(o.VALUE_OUT )>0?Number(o.VALUE_FINAL ):0));
+					}
+				}
+				
+				if(multi){
+					for(var i:uint=0; i<itensCount; i++){
+						itemList(i);
+					}
+					btnAllowMultiSelect();
+					DS_.text = '('+itensCount+') ...';
+					changeStatusBtn(true,objDat);
+				}else{
+					itemList(0);
+					btnAllowOneSelect();
+					DS_.text = gnncData.__firstLetterUpperCase(objDat.DESCRIPTION);
+					changeStatusBtn(false,objDat);
+				}
+				
+				VI_.text = gnncDataNumber.__safeReal(value_in,2,'');
+				VO_.text = gnncDataNumber.__safeReal(value_out,2,'');
+				VR_.text = gnncDataNumber.__safeReal(value_in-value_out,2,'');
+				VS_.text = '=';
+				
+				VIopen_.text = gnncDataNumber.__safeReal(value_in_open,2,'');
+				VOopen_.text = gnncDataNumber.__safeReal(value_out_open,2,'');
+				VRopen_.text = gnncDataNumber.__safeReal(value_in_open-value_out_open,2,'');
+				VSopen_.text = '=';
+			}
+			
+			private function changeStatusBtn(multiSelect:Boolean,objDat:Object):void
+			{
+				//multi select
+				if(multiSelect == true)
+				{
+					btnFinal_.visible = true;
+					btnNoFinal_.visible = false;
+					
+					btnCancel_.label = 'Cancelar' ;
+					btnCancel_.setStyle( 'icon' , gnncEmbedBlackWhite.check_32_bw_ok );
+					
+					btnAlert_.label = 'Pendente' ;
+					btnAlert_.setStyle( 'icon' , gnncEmbedBlackWhite.check_32_yellow_ok );
+					
+					return;
+				}
+				
+				//single select
+				btnFinal_.visible   = gnncDate.__isValid(objDat.DATE_FINAL) ? false : true ;
+				btnNoFinal_.visible = !btnFinal_.visible;
+				
+				btnCancel_.label = gnncDate.__isValid(objDat.DATE_CANCELED) ? 'Reverter' : 'Cancelar' ;
+				btnCancel_.setStyle( 'icon' , btnCancel_.label == 'Cancelar' ? gnncEmbedBlackWhite.check_32_bw_ok : gnncEmbedBlackWhite.app_close_32_clean  );
+				
+				btnAlert_.label = uint(objDat.ACTIVE) === 1 ? 'Reverter' : 'Pendente' ;
+				btnAlert_.setStyle( 'icon' , btnAlert_.label == 'Pendente' ? gnncEmbedBlackWhite.check_32_yellow_ok : gnncEmbedBlackWhite.app_close_32_clean  );
+			}
+			
+			//private function __LABELF(data:Object, field:String, index:Number, percentValue:Number):String {
+			//var temp:String = String(" " + percentValue).substr(0,6);
+			//return data.label + "\n" + data.value + " (" + String(percentValue).substr(0,4) + "%)";
+			//}
+			
+			private function __financialToday():void
+			{
+				_year			= _today.fullYear;
+				__changeMonth	(_today.month,false,_year);
+				__financialList	(_today);
+			}
+			
+			private function __changeMonth(month_:uint,refresh_:Boolean=false,year_:uint=0):void
+			{
+				salesRangeDays_.values = [1,31];
+				_month			= month_;
+				MONTH_TXT_.text = gnncGlobalArrays._MONTH.getItemAt(month_).NICK_NAME.toString().toUpperCase();
+				YEAR_TXT_.text 	= year_.toString().substr(2,2);
+				if(gnncGlobalStatic._userId && refresh_){
+					//__financialRefresh();
+				}
+			}
+			
+			private function __changeMonthPrev():void
+			{
+				if(_month > 0){
+					_month--;
+				}else{
+					_month = 11;
+					_year--;
+				}
+				__changeMonth(_month,false,_year);
+			}
+			
+			private function __changeMonthNext():void
+			{
+				if(_month < 11){
+					_month++;
+				}else{
+					_month = 0;
+					_year++;
+				}
+				__changeMonth(_month,false,_year);
+			}
+			
+			private function __financialMenu(e:MouseEvent):void
+			{
+				var itemSafe:ContextMenuItem 		= new ContextMenuItem('Novo Lançamento:',false,false);
+				var itemSafeIn:ContextMenuItem 		= new ContextMenuItem('Receita (+)',true,true);
+				itemSafeIn.addEventListener			(Event.SELECT,function(e:Event):void{ __newFinancial(true) });
+				var itemSafeOut:ContextMenuItem 	= new ContextMenuItem('Despesa (-)',false,true);
+				itemSafeOut.addEventListener		(Event.SELECT,function(e:Event):void{ __newFinancial(false) });
+				
+				// Create custom context menu. 
+				var cm:ContextMenu = new ContextMenu();
+				cm.hideBuiltInItems();
+				cm.customItems = [itemSafe,itemSafeIn,itemSafeOut];
+				
+				FINANCIAL_.contextMenu = cm;
+			}
+			
+			private function __financialFilter(textFilter_:String,repeat:Boolean=true):void
+			{
+				callLater(function():void{
+					callLater(function():void{
+						callLater(function():void{
+							FINANCIAL_.dataProvider = new gnncDataArrayCollection().__filterArray(_financial.DATA_ARR,['DESCRIPTION','DOCUMENT_NUMBER','NAME_CLIENT','NAME_GROUP'],textFilter_);
+						});
+					});
+				});
+				//FINANCIAL_.dataProvider = new gnncDataArrayCollection().__filterArray(_financial.DATA_ARR,['DESCRIPTION','DOCUMENT_NUMBER','NAME_CLIENT','NAME_FINANCIAL_ACCOUNT','NAME_DEPARTAMENT','NAME_GROUP'],textFilter_);
+				//if(repeat)
+				//callLater(__financialFilter,[textFilter_,false]);
+			}
+			
+			private function __reportPdf():void
+			{
+				var _object:Object			= new Object();
+				_object['arrayC']			= new ArrayCollection(FINANCIAL_.dataProvider.toArray());
+				new gnncFileReport_financial_list().__create(_object);
+			}
+			
+			/*
+			private function __checkLetter(showOk_:Boolean=false):void
+			{	
+			
+			var _sql:String = " select COUNT(ID) TOTAL, " +
+			
+			" coalesce(((select NUMBER from dbd_financial WHERE ID > 0 AND NUMBER_LETTER = 'A' ORDER BY NUMBER DESC LIMIT 0,1) - ( select NUMBER from dbd_financial WHERE ID > 0 AND NUMBER_LETTER = 'A' ORDER BY NUMBER DESC LIMIT 50,1)),'0') as A, " +
+			" coalesce(((select NUMBER from dbd_financial WHERE ID > 0 AND NUMBER_LETTER = 'B' ORDER BY NUMBER DESC LIMIT 0,1) - ( select NUMBER from dbd_financial WHERE ID > 0 AND NUMBER_LETTER = 'B' ORDER BY NUMBER DESC LIMIT 50,1)),'0') as B, " +
+			" coalesce(((select NUMBER from dbd_financial WHERE ID > 0 AND NUMBER_LETTER = 'C' ORDER BY NUMBER DESC LIMIT 0,1) - ( select NUMBER from dbd_financial WHERE ID > 0 AND NUMBER_LETTER = 'C' ORDER BY NUMBER DESC LIMIT 50,1)),'0') as C, " +
+			" coalesce(((select NUMBER from dbd_financial WHERE ID > 0 AND NUMBER_LETTER = 'D' ORDER BY NUMBER DESC LIMIT 0,1) - ( select NUMBER from dbd_financial WHERE ID > 0 AND NUMBER_LETTER = 'D' ORDER BY NUMBER DESC LIMIT 50,1)),'0') as D, " +
+			" coalesce(((select NUMBER from dbd_financial WHERE ID > 0 AND NUMBER_LETTER = 'E' ORDER BY NUMBER DESC LIMIT 0,1) - ( select NUMBER from dbd_financial WHERE ID > 0 AND NUMBER_LETTER = 'E' ORDER BY NUMBER DESC LIMIT 50,1)),'0') as E, " +
+			" coalesce(((select NUMBER from dbd_financial WHERE ID > 0 AND NUMBER_LETTER = 'R' ORDER BY NUMBER DESC LIMIT 0,1) - ( select NUMBER from dbd_financial WHERE ID > 0 AND NUMBER_LETTER = 'E' ORDER BY NUMBER DESC LIMIT 50,1)),'0') as R, " +
+			" coalesce(((select NUMBER from dbd_financial WHERE ID > 0 AND NUMBER_LETTER = 'S' ORDER BY NUMBER DESC LIMIT 0,1) - ( select NUMBER from dbd_financial WHERE ID > 0 AND NUMBER_LETTER = 'E' ORDER BY NUMBER DESC LIMIT 50,1)),'0') as S, " +
+			" coalesce(((select NUMBER from dbd_financial WHERE ID > 0 AND NUMBER_LETTER = 'T' ORDER BY NUMBER DESC LIMIT 0,1) - ( select NUMBER from dbd_financial WHERE ID > 0 AND NUMBER_LETTER = 'E' ORDER BY NUMBER DESC LIMIT 50,1)),'0') as T  " +
+			" from dbd_financial WHERE ID > 0 ORDER BY NUMBER DESC LIMIT 0,1 ";
+			
+			_connCheck.__destroy();
+			_connCheck._allowGlobalError 	= false;
+			_connCheck._allowGlobalLoading 	= false;
+			_connCheck._requestsType 		= 'last';
+			_connCheck._returnType			= 'single';
+			_connCheck.__sql(_sql,'','',__fResult,__fFault);
+			
+			function __fResult(e:*):void
+			{
+			var o:Object 	= _connCheck.DATA_ARR.getItemAt(0);
+			var s:String 	= '';
+			var i:uint		= 0;
+			var x:Array		= ['A','B','C','D','E','R','S','T'];
+			var c:uint		= x.length;
+			
+			if(o.TOTAL < 150) //se o sistema tiver menos de 150 lanc nao verifica
+			return;
+			
+			for(i=0;i<c;i++)
+			if(uint(o[x[i]]) > 0)
+			if(o[x[i]] != 50)
+			s += x[i]+' ';
+			
+			if(s)
+			new gnncAlert().__alert("Foi encontrada falha na continuidade dos registros, verifique o problema nos últimos 50 lançamentos. Letra(s) "+s+".");
+			else if(showOk_ && !s)
+			new gnncAlert().__alert("A continuidade dos registros está corretamente registrada.");
+			
+			}
+			
+			function __fFault(e:*):void
+			{
+			}
+			
+			}*/
+			
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			// account
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			
+			private function __getBank(bank:String):Object
+			{
+				var x:int = new gnncDataArrayCollection().__getIndex(gnncGlobalArrays._financialBankSimple,'data',bank);
+				return x < 0 ? gnncEmbedBlackWhite.bw_financial_16_account : gnncEmbedBank[gnncGlobalArrays._financialBankSimple.getItemAt(x).image+'_16'];
+			}
+			
+			private function __checkSetAccount():void 
+			{
+				if(!_idAccount && _AllAccounts==false)
+					__setAccount();
+			}
+			
+			private function __AllAccount():void 
+			{
+				if(_idAccount != 0 && _AllAccounts != true)
+					FINANCIAL_.dataProvider = new ArrayCollection();
+				
+				_AllAccounts    = true;
+				_idAccount 		= 0;
+				_nameAccount 	= 'Todas as Contas';
+				
+				ID_FINANCIAL_ACCOUNT_.setStyle	('icon',gnncEmbedBlackWhite.bw_all_16);
+				ID_FINANCIAL_ACCOUNT_.label 	= gnncData.__firstLetterUpperCase(_nameAccount);
+			}
+			
+			private function __resetAccount():void 
+			{
+				FINANCIAL_.dataProvider = new ArrayCollection();
+				
+				_AllAccounts	= false;
+				_idAccount 		= 0;
+				_nameAccount 	= 'Conta / Banco';
+				
+				ID_FINANCIAL_ACCOUNT_.setStyle	('icon',gnncEmbedBlackWhite.bw_financial_16_account);
+				ID_FINANCIAL_ACCOUNT_.label 	= gnncData.__firstLetterUpperCase(_nameAccount);
+			}
+			
+			private function __setAccount():void 
+			{			
+				var p:selectAccount = new selectAccount();
+				p._idAccount = _idAccount;
+				new gnncPopUp(parentApplication).__creation(p,true,false,removePopUp);
+				function removePopUp(e:*):void
+				{
+					if(p._change)
+					{
+						if(!p._AllAccounts)
+						{
+							if(_idAccount != p._idAccount)
+								FINANCIAL_.dataProvider = new ArrayCollection();
+							
+							_AllAccounts	= false;
+							_idAccount 		= p._idAccount;
+							_nameAccount 	= p._nameAccount;
+							
+							ID_FINANCIAL_ACCOUNT_.setStyle	('icon',__getBank(p._bank));
+							ID_FINANCIAL_ACCOUNT_.label 	= gnncData.__firstLetterUpperCase(_nameAccount);
+						}
+						else{
+							__AllAccount();
+						}
+					}
+				}	
+			}
+			
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			// course
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			
+			
+			//Desativado
+			private function __financialCourseNew():void
+			{
+				var _page1:newCourseParcelFinancial = new newCourseParcelFinancial();
+				new gnncPopUp(parentApplication).__creation(_page1,true,false,__fRemove1);
+				function __fRemove1(e:*):void
+				{
+				}
+
+			}
+			
+			private function __courseSelectedMassive():void
+			{
+				var p:selectCourse = new selectCourse();
+				new gnncPopUp().__creation(p,false,true,removePopUp);
+				function removePopUp(e:*):void
+				{
+					if(!p._idCourse){
+						setCOURSE_.setStyle("skinClass", skin_buttonBlue);
+						setCOURSE_.setStyle("idCourse", '');
+						setCOURSE_.setStyle("nameCourse", '');
+						HsetCOURSE_.label = 'Turma';
+						return;
+					}
+					setCOURSE_.setStyle("skinClass", skin_button);
+					setCOURSE_.setStyle("idCourse", p._idCourse);
+					setCOURSE_.setStyle("nameCourse", p._nameCourse);
+					HsetCOURSE_.label = 'Turma ('+p._nameCourse+')';
+				}
+			}
+			
+			private function __courseClear():void
+			{
+				courseName_.text = courseDateS_.text = courseTeacher_.text = '';
+				courseGroup_.visible = false;
+				listCourseStudent_.dataProvider = listCourseTeacher_.dataProvider = listCourse_.dataProvider = new ArrayCollection();
+				idCourse = 0;
+			}
+			
+			private function __courseSelected():void
+			{
+				var p:selectCourse = new selectCourse();
+				new gnncPopUp().__creation(p,false,true,removePopUp);
+				function removePopUp(e:*):void
+				{
+					if(!p._idCourse){
+						btnCourse_.setStyle("skinClass", skin_buttonBlue);
+						__courseClear();
+						return;
+					}
+					
+					btnCourse_.setStyle("skinClass", skin_button);
+					idCourse = p._idCourse;
+					
+					__courseStudentList(p._idCourse);
+				}
+			}
+			
+			private function __courseStudentList(idCourse_:uint):void
+			{
+				loading(true);
+				
+				//GROUP_CONCAT
+				
+				var _sql2:String = " " +
+					" select s.ID, s.ID_CLIENT, s.ACTIVE, c.NAME as NAME, 'STUDENT' as TYPE, '0' as THEMAN, " +
+					" p.NAME as NAME_COURSE, p.DATE_START, p.DATE_END " +
+					" from dbd_course_student s " +
+					" left join dbd_client  c on ( c.ID = s.ID_CLIENT  ) " +
+					" left join dbd_project p on ( p.ID = s.ID_PROJECT )" +
+					" where s.ID_PROJECT = "+idCourse_+" " +
+					" " +
+					" UNION " +
+					" " +
+					" select s.ID, s.ID_CLIENT, s.ACTIVE, c.NAME as NAME, 'TEACHER' as TYPE, s.THEMAN as THEMAN, " +
+					" p.NAME as NAME_COURSE, p.DATE_START, p.DATE_END " +
+					" from dbd_course_teacher s " +
+					" left join dbd_client  c on ( c.ID = s.ID_CLIENT  ) " +
+					" left join dbd_project p on ( p.ID = s.ID_PROJECT )" +
+					" where s.ID_PROJECT = "+idCourse_+" " +
+					" " +
+					/*" UNION " +
+					" " +
+					" select p.ID, 0 as ID_CLIENT, 0 as ACTIVE, p.NAME as NAME, 'COURSE' as TYPE, 0 as THEMAN, " +
+					" p.NAME as NAME_COURSE, p.DATE_START, p.DATE_END " +
+					" from dbd_project p " +
+					" where p.ID IN ( select t.ID_PROJECT from dbd_course_teacher t where t.ID_CLIENT IN ( select e.ID_CLIENT from dbd_course_teacher e where e.ID_PROJECT = '"+idCourse_+"' AND e.THEMAN = 1 ) ) " +
+					" " +*/
+					" order by THEMAN desc,TYPE asc,NAME asc" +
+					"" +
+					"";
+				
+				_connStudent.__sql(_sql2,'','',__fResult,__fFault);
+				
+				function __fResult(e:*):void
+				{
+					loading(false);
+					if(_connStudent.DATA_ROWS==0)
+						return;
+					
+					var obj:Object = _connStudent.DATA_ARR.getItemAt(0);
+					var coo:ArrayCollection = new gnncDataArrayCollection().__filterNumeric(_connStudent.DATA_ARR,'THEMAN',1);
+					
+					courseName_.text 	= gnncData.__trimText(gnncData.__firstLetterUpperCase(obj.NAME_COURSE,true,false));
+					courseDateS_.text 	= 'De ' + gnncDate.__date2Legend(obj.DATE_START) + ' até  ' + gnncDate.__date2Legend(obj.DATE_END);
+					courseTeacher_.text = coo.length > 0 ? gnncData.__trimText(gnncData.__firstLetterUpperCase(coo.getItemAt(0).NAME,true,false)) : '';
+					
+					listCourseStudent_.dataProvider = new gnncDataArrayCollection().__filter(_connStudent.DATA_ARR,'TYPE','STUDENT',false,false);
+					listCourseTeacher_.dataProvider = new gnncDataArrayCollection().__filter(_connStudent.DATA_ARR,'TYPE','TEACHER',false,false);
+					listCourse_.dataProvider        = new gnncDataArrayCollection().__filter(_connStudent.DATA_ARR,'TYPE','COURSE',false,false);
+					
+					courseGroup_.visible = true;
+				}
+				
+				function __fFault(e:*):void{
+					loading(false);
+				}
+				
+			}
+			
+			//pesquisa relacionada aos alunos e professores
+			private function __financialListCourseSafe(type:String):void
+			{
+				return;
+				var id:uint = 0;
+				
+				switch(type){
+					case 'TEACHER': 
+						if(listCourseTeacher_.selectedIndex<0)
+							return;
+						id = listCourseTeacher_.selectedItem.ID_CLIENT; 
+						break;
+					case 'STUDENT': 
+						if(listCourseStudent_.selectedIndex<0)
+							return;
+						id = listCourseStudent_.selectedItem.ID_CLIENT; 
+						break;
+					case 'COURSE': 
+						if(listCourse_.selectedIndex<0)
+							return;
+						id = listCourse_.selectedItem.ID; 
+						break;
+				}
+				
+				if(id==0)
+					return;
+				
+				var sql:String = " select "+getColumns('f').join(',')+" from dbd_financial f where " +
+					" f.ID_PROJECT > 0 AND f.DATE_FINAL < 1 AND f.DATE_END < NOW() AND " +
+					" f.ID_CLIENT IN " +
+					" ( " +
+					" select s.ID_CLIENT " +
+					" from dbd_course_student s " +
+					" where s.ID_PROJECT IN (select t.ID_PROJECT from dbd_course_teacher t where t.ID_CLIENT = "+id+" order by t.ID_PROJECT asc) " +
+					" GROUP by s.ID_CLIENT " +
+					" ) " +
+					" limit 0,300 ";
+				
+				/*
+				ids course cassio
+				select GROUP_CONCAT(t.ID_PROJECT) as IDS_COURSE from dbd_course_teacher t where t.ID_CLIENT = 1908
+				
+				alunos relacionado a este professor cassio
+				select s.ID_CLIENT,s.ID_PROJECT
+				from dbd_course_student s
+				where s.ID_PROJECT IN (select t.ID_PROJECT from dbd_course_teacher t where t.ID_CLIENT = 1908 order by t.ID_PROJECT asc)
+				*/
+				
+				loading(true);
+				panel(false);
+				_financial.__sql(sql,'','',__fResult,__fFault);
+				
+				function __fResult(e:*):void
+				{
+					FINANCIAL_.dataProvider = _financial.DATA_ARR;
+					loading(false);
+				}
+				
+				function __fFault(e:*):void{
+					loading(false);
+				}
+				
+			}
+			
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			// new
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			
+			/*
+			var objDat:Object         = FINANCIAL_.selectedItem;
+			var idxDat:int            = FINANCIAL_.selectedIndex;
+			var idxArr:int            = _financial.DATA_ARR.getItemIndex(objDat);				
+			var itens:Vector.<Object> = FINANCIAL_.selectedItems;
+			var itensCount:uint       = itens.length;
+			*/
+			
+			public function __newFinancial(safe_in_:Boolean):void
+			{
+				if(!gnncPermission.__access('safe-in','n',false) && safe_in_ === true){
+					gnncPermission.__alert();
+					return;
+				}
+				if(!gnncPermission.__access('safe-out','n',false) && safe_in_ === false){
+					gnncPermission.__alert();
+					return;
+				}
+				if(!_idAccount && _AllAccounts==false){
+					__setAccount();
+					return;
+				}
+				
+				var p:newFinancial = new newFinancial();
+				p._idAccount = _idAccount;
+				safe_in_ ? p._safeIn = true : p._safeOut = true;
+				new gnncPopUp(parentApplication).__creation(p,true,false,removePopUp);
+				function removePopUp(e:*):void
+				{ 
+					if(p._change){
+						updateItemRender(null,[p._tableFinancial.KEY_FINANCIAL],[p._tableFinancial.ID_KEY]);
+					}
+				}
+			}
+			
+			private function __newFinancialTrans():void
+			{
+				if(!gnncPermission.__access('safe-trans','n',true))
+					return;
+				
+				if(!_idAccount && _AllAccounts==false){
+					__setAccount();
+					return;
+				}
+				
+				var p:newFinancialTrans = new newFinancialTrans();
+				new gnncPopUp().__creation(p,true,false,removePopUp);
+				function removePopUp(e:*):void
+				{ 
+					if(p._change){
+						if(p._tableFinancial.KEY_FINANCIAL)
+							updateItemRender(null,[p._tableFinancial.KEY_FINANCIAL]);
+					}
+				}
+			}
+			
+			private function __newFinancialNote():void
+			{
+				if(!gnncPermission.__access('safe-note','n',true))
+					return;
+				
+				var p:newFinancialNote = new newFinancialNote();
+				new gnncPopUp().__creation(p,true,false,removePopUp);
+				function removePopUp(e:*):void
+				{ 
+					if(p._change){
+						updateItemRender(null,null,[p._tableFinancial.ID_KEY]);
+					}
+				}
+			}
+			
+			private function __newFinancialConnection():void
+			{
+				if(!checkDataList(false,true,true))
+					return;
+				
+				var objDat:Object         = FINANCIAL_.selectedItem;
+				var idxDat:int            = FINANCIAL_.selectedIndex;
+				var idxArr:int            = _financial.DATA_ARR.getItemIndex(objDat);
+				var itens:Vector.<Object> = FINANCIAL_.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				if(!gnncPermission.__access('safe-connection','a',true))
+					return;
+				
+				var p:newConnection = new newConnection();
+				p.dataProvider = new gnncDataArrayCollection().__vector2arraC(itens);
+				new gnncPopUp().__creation(p,true,false,removePopUp);
+				function removePopUp(e:*):void{
+					if(p._change == true){
+						gnncGlobalLog.__add('Ids:'+p._changeIds+',KeyFinancial:'+p._changeKeyFinancial+',idKey:'+p._changeIdKey,'CONNECTION');
+						updateItemRender(p._changeIds,p._changeKeyFinancial,p._changeIdKey);
+						/*
+						if(p._changeIds)
+						updateItemRender(p._changeIds);
+						else if(p._changeKeyFinancial)
+						updateItemRender(null,p._changeKeyFinancial);
+						else if(p._changeIdKey)
+						updateItemRender(null,null,p._changeIdKey);
+						*/
+					}
+				}
+			}
+			
+			private function __newFinancialReversal():void
+			{ 
+				if(!checkDataList(false,true,true))
+					return;
+				
+				if(!checkDataType(true,false,false,false,true,true))
+					return;
+				
+				var objDat:Object         = FINANCIAL_.selectedItem;
+				var idxDat:int            = FINANCIAL_.selectedIndex;
+				var idxArr:int            = _financial.DATA_ARR.getItemIndex(objDat);
+				var itens:Vector.<Object> = FINANCIAL_.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				if(!gnncPermission.__access('safe-reversal','a',true))
+					return;
+				
+				if(itensCount == 0){
+					new gnncAlert().__alert('Selecione um ou mais lançamentos para <b>estornar<b/>.');
+					return;
+				}
+				
+				var p:newFinancialReversal = new newFinancialReversal()
+				p.dataProvider = new gnncDataArrayCollection().__vector2arraC(itens);
+				new gnncPopUp().__creation(p,true,false,removePopUp);
+				function removePopUp(e:*):void{
+					if(p._change == true){
+						updateItemRender([objDat.ID],null,[p._tableFinancial.ID_KEY]);
+					}
+				}
+			}
+			
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			// others
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			/* ------------------------------------------------------------------------------------------------------------------------------------------ */
+			
+			public function __financialViewClickPanel():void
+			{
+				var idxDat:int    = listPanel_.selectedIndex;
+				var objDat:Object = listPanel_.selectedItem;
+				if(idxDat<0)
+					return;
+				listPanel_.dispatchEvent(new gnncEventGeneral(gnncEventGeneral._view,objDat));
+			}
+			
+			public function __financialView(e:*=null):void
+			{
+				var listMain:List = null; 
+				if(e==null)
+					listMain = FINANCIAL_;
+				else if(e.hasOwnProperty('currentTarget'))
+					listMain = e.currentTarget;
+				
+				var objDat:Object         = listMain.selectedItem;
+				var idxDat:int            = listMain.selectedIndex;
+				var itens:Vector.<Object> = listMain.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				if(!listMain.dataProvider.length)
+					return;
+				if(itensCount > 1){
+					new gnncAlert().__alert('Selecione apenas um lançamento na listagem.');
+					return;
+				}
+				if(idxDat < 0){
+					new gnncAlert().__alert('Selecione um lançamento na lista.');
+					return;
+				}
+				if(objDat.MIX == 'FINANCIAL_NOTE'){
+					if(!gnncPermission.__access('safe-note','v',true))
+						return;
+					__editFinancial();
+					return;
+				}
+				if(objDat.MIX == 'FINANCIAL_TRANS'){
+					if(!gnncPermission.__access('safe-trans','v',true))
+						return;
+				}
+				if(objDat.MIX == 'FINANCIAL'){
+					if(!gnncPermission.__access('safe-in','v',false) && Number(objDat.VALUE_IN) > 0 ){
+						gnncPermission.__alert();
+						return;
+					}
+					if(!gnncPermission.__access('safe-out','v',false) && Number(objDat.VALUE_OUT) > 0 ){
+						gnncPermission.__alert();
+						return;
+					}
+				}
+				
+				var p:viewFinancial = new viewFinancial();
+				p._tableFinancial 	= new table_financial(objDat.ID);
+				new gnncPopUp().__creation(p,true,false,removePopUp);
+				function removePopUp(e:*):void{
+				}
+			}
+			
+			private function __financialViewReference(e:*=null,listObject:Object=null):void
+			{
+				if(_financial.DATA_ROWS==0)
+					return;
+				
+				if(listObject==null)
+					listObject = FINANCIAL_;
+				
+				var objDat:Object         = listObject.selectedItem;
+				var idxDat:int            = listObject.selectedIndex;
+				var idxArr:int            = _financial.DATA_ARR.getItemIndex(objDat);
+				var itens:Vector.<Object> = listObject.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				var ids:Array = new Array();
+				
+				if(String(objDat.IDS_REFERENCE).length>0)
+					ids.push(objDat.IDS_REFERENCE);
+				if(Number(objDat.ID_PAY_PART)>0)
+					ids.push(objDat.ID_PAY_PART);
+				if(Number(objDat.ID)>0)
+					ids.push(objDat.ID);
+				
+				var _sql:String = " select " +
+					
+					getColumns('f').join(',') +
+					
+					" from dbd_financial f " +
+					" where f.ID IN ("+ids.join(',')+") " +
+					
+					( String(objDat.IDS_REFERENCE).length>0 ? " OR f.IDS_REFERENCE like '%"+objDat.IDS_REFERENCE+"%' OR f.IDS_REFERENCE like '"+objDat.IDS_REFERENCE+"' " : '' ) +
+					( Number(objDat.ID)>0          ? " OR f.IDS_REFERENCE like '%"+objDat.ID+"%' OR f.IDS_REFERENCE like '"+objDat.ID+"' " : '' ) +
+					( Number(objDat.ID_PAY_PART)>0 ? " OR f.ID_PAY_PART = "+objDat.ID_PAY_PART+" " : '' ) +
+					
+					" order by f.ID asc ";
+				
+				panel(false,false);
+				loading(true);
+				_connExec.__clear();
+				_connExec.__sql(_sql,'','',__fResult,__fFault);
+				
+				function __fResult(e:*):void
+				{
+					//FINANCIAL_.dataProvider = _connExec.DATA_ARR;
+					listPanel_.dataProvider = _connExec.DATA_ARR;
+					checkSameName(_connExec.DATA_ARR);
+					panel(true);
+					loading(false);
+				}
+				
+				function __fFault(e:*):void
+				{
+					loading(false);
+				}
+				
+			}
+			
+			private function __editFinancial():void
+			{
+				if(!checkDataList(false,true,false))
+					return;
+				
+				if(!checkDataType(true,false,true,true,true,true))
+					return;
+				
+				var objDat:Object         = FINANCIAL_.selectedItem;
+				var idxDat:int            = FINANCIAL_.selectedIndex;
+				var idxArr:int            = _financial.DATA_ARR.getItemIndex(objDat);
+				var itens:Vector.<Object> = FINANCIAL_.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				//permission
+				if(!gnncPermission.__access('safe-in','e',false)    && objDat.MIX == 'FINANCIAL' && Number(objDat.VALUE_IN) > 0){
+					gnncPermission.__alert();
+					return;
+				}
+				if(!gnncPermission.__access('safe-out','e',false)   && objDat.MIX == 'FINANCIAL' && Number(objDat.VALUE_IN) > 0){
+					gnncPermission.__alert();
+					return;
+				}
+				if(!gnncPermission.__access('safe-note','e',false) && objDat.MIX == 'FINANCIAL_NOTE'){
+					gnncPermission.__alert();
+					return;
+				}
+				
+				//if(objDat.MIX == 'FINANCIAL_TRANS'){
+				//new gnncAlert().__alert('Transferências não podem ser editadas. Clique em excluir depois crie uma nova Transferência.');
+				//return;
+				//}
+				if(gnncDate.__isValid(objDat.DATE_CANCELED)){
+					new gnncAlert().__alert('Não é possível editar lançamento cancelado.');
+					return;
+				}
+				if(objDat.IS_REVERSAL==1 && String(objDat.IDS_REFERENCE)!==''){
+					gnncAlert.YES_LABEL = 'Trazer o estorno';
+					gnncAlert.__alert('Não é possível editar um estorno. ' +
+						'Você pode editar o lançamento original, id: '+objDat.IDS_REFERENCE,'',
+						function(e:gnncCloseEvent):void{
+							if(e.detail === gnncAlert.YES)
+								__financialViewReference();
+						},[gnncAlert.YES,gnncAlert.CANCEL]);
+					return;
+				}
+				if(objDat.MIX == 'FINANCIAL_NOTE'){
+					var pageNote:newFinancialNote = new newFinancialNote();
+					pageNote._tableFinancial = new table_financial(objDat.ID);
+					new gnncPopUp().__creation(pageNote,true,false,closeFlexNote);
+					function closeFlexNote(e:*):void{ 
+						if(pageNote._change)
+							updateItemRender([objDat.ID]);
+					}
+					return;
+				}
+				
+				var p:newFinancial = new newFinancial();
+				p._tableFinancial  = new table_financial(objDat.ID);
+				new gnncPopUp().__creation(p,true,false,removePopUp);
+				function removePopUp(e:*):void{ 
+					if(p._change)
+						updateItemRender([objDat.ID]);
+				}
+			}
+			
+			private function __newAttach():void
+			{
+				if(!checkDataList(false,true,false))
+					return;
+				
+				if(!checkDataType(true,true,false,true,true,true))
+					return;
+				
+				var objDat:Object         = FINANCIAL_.selectedItem;
+				var idxDat:int            = FINANCIAL_.selectedIndex;
+				var idxArr:int            = _financial.DATA_ARR.getItemIndex(objDat);
+				var itens:Vector.<Object> = FINANCIAL_.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				if(!gnncPermission.__access('safe-attach','n',true))
+					return;
+				
+				/*if(objDat.MIX == 'FINANCIAL_NOTE'){
+				new gnncAlert().__alert('Em Nota os arquivos não podem ser anexados.');
+				return;
+				}*/	
+				
+				var table:table_attach = new table_attach();
+				table.MIX     = _MIX;
+				table.ID_MIX  = objDat.ID;
+				table.ID_USER = gnncGlobalStatic._userId;
+				
+				var p:newAttach = new newAttach();
+				p._tableAttach  = table;
+				p._MIX          = _MIX;
+				new gnncPopUp(parentApplication).__creation(p,true,false,removePopUp);
+				function removePopUp(e:*):void{ 
+				}
+			}
+			
+			private function __deleteFinancial():void
+			{
+				if(!checkDataList(false,true,true))
+					return;
+				
+				if(!checkDataType(true,true,true,true,true,true))
+					return;
+				
+				var objDat:Object         = FINANCIAL_.selectedItem;
+				var idxDat:int            = FINANCIAL_.selectedIndex;
+				var idxArr:int            = _financial.DATA_ARR.getItemIndex(objDat);
+				var itens:Vector.<Object> = FINANCIAL_.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				var sql:String = '';
+				var i:uint = 0;
+				
+				if(itensCount == 1)
+				{
+					//não pode dar baixa com a data de amanhã
+					var DToday:Date		= gnncGlobalStatic._dateToday !== null ? gnncData.__clone(gnncGlobalStatic._dateToday) as Date : _today;
+					var DFinal:Date		= gnncDate.__string2Date(objDat.DATE_FINAL);
+					
+					//Zera as horas
+					DToday.hours 		= 0;
+					DToday.minutes 		= 0;
+					DToday.seconds 		= 0;
+					DToday.milliseconds = 0;
+					//Zera as horas
+					DFinal.hours 		= 0;
+					DFinal.minutes 		= 0;
+					DFinal.seconds 		= 0;
+					DFinal.milliseconds = 0;
+					
+					if(( DFinal.time > DToday.time || DFinal.time < DToday.time ) && gnncDate.__isValid(objDat.DATE_FINAL) ){
+						gnncPermission.__alertSystemNoAllowed();
+						return;
+					}					
+					if(gnncDate.__isValid(objDat.DATE_FINAL)){
+						new gnncAlert().__alert('Lançamentos <b>faturados</b> (baixados) não podem ser excluídos para manter a integridade do sistema.');
+						return;
+					}
+				}
+				
+				if((objDat.MIX == 'FINANCIAL' || objDat.MIX == 'FINANCIAL_NOTE') && itensCount == 1)
+				{
+					//permission
+					if(!gnncPermission.__access('safe-in','d',false)   && objDat.MIX == 'FINANCIAL' && Number(objDat.VALUE_IN) > 0 ){
+						gnncPermission.__alert();
+						return;
+					}
+					if(!gnncPermission.__access('safe-out','d',false)  && objDat.MIX == 'FINANCIAL' && Number(objDat.VALUE_OUT) > 0){
+						gnncPermission.__alert();
+						return;
+					}
+					if(!gnncPermission.__access('safe-note','d',false) && objDat.MIX == 'FINANCIAL_NOTE'){
+						gnncPermission.__alert();
+						return;
+					}
+					
+					gnncAlert.__delete('Você deseja <b>excluir esse registro definitivamente</b> dos registros financeiros?','Excluir',
+						function __eFinancial(event:gnncCloseEvent):void
+						{
+							if(event.detail != gnncAlert.YES)
+								return;
+							
+							gnncAlert.__delete('Lembre-se que depois dos dados apagados não será possível reverter. <b>Deseja continuar</b>?','Confirmação de exclusão',
+								function __eFinancial(event:gnncCloseEvent):void
+								{
+									if(event.detail != gnncAlert.YES)
+										return;
+									
+									loading(true);
+									function __fResult1(e:*):void
+									{
+										FINANCIAL_.dataProvider.removeItemAt(idxDat);
+										//update
+										_financial.DATA_ARR = new ArrayCollection(FINANCIAL_.dataProvider.toArray());
+										__clearMultiSelect();
+										loading(false);
+									}
+									function __fFault1(e:*):void{ 
+										loading(false);
+									}
+									
+									sql = new gnncSql().__DELETE(new table_financial(),[objDat.ID],true);
+									_connExec.__sql(sql,'Dados deletados.','',__fResult1,__fFault1);
+									
+								},[gnncAlert.YES,gnncAlert.CANCEL]);
+							
+						},[gnncAlert.YES,gnncAlert.CANCEL]);
+				}
+				else if(objDat.MIX == 'FINANCIAL_TRANS' && itensCount == 1)
+				{
+					//permission
+					if(!gnncPermission.__access('safe-trans','d',true))
+						return;
+					
+					gnncAlert.__delete('Você deseja <b>excluir essa transferência definitivamente</b> dos registros financeiros?','Excluir',
+						function __eTrans(event:gnncCloseEvent):void
+						{
+							if(event.detail != gnncAlert.YES)
+								return;
+							
+							gnncAlert.__delete('Lembre-se que depois dos dados apagados não será possível reverter. <b>Deseja continuar</b>?','Confirmação de exclusão',
+								function __eFinancial(event:gnncCloseEvent):void
+								{
+									if(event.detail != gnncAlert.YES)
+										return;
+									
+									var k:String = objDat.KEY_FINANCIAL;
+									var d:String = objDat.DATE_END;
+									
+									if(k.length < 20 || gnncDate.__isNull(d)){
+										new gnncAlert().__alert('Ocorreu algum erro. Verifique a <b>chave (keyfinancial) ou o vencimento do lançamento</b>.');
+										return;
+									}
+									
+									//_gnncPopUp.__loading('Excluindo...');
+									loading(true);
+									
+									function __fResult2(e:*):void
+									{
+										__clearMultiSelect();
+										FINANCIAL_.dataProvider = new ArrayCollection();
+										//_gnncPopUp.__close();
+										loading(false);
+									}
+									
+									function __fFault2(e:*):void
+									{ 
+										//_gnncPopUp.__close();
+										loading(false);
+									}
+									
+									sql = "DELETE FROM dbd_financial where KEY_FINANCIAL = '"+k+"' AND LEFT(DATE_END,10) like LEFT('"+d+"',10) ";
+									_connExec.__sql(sql,'Dados deletados.','',__fResult2,__fFault2);
+									
+								},[gnncAlert.YES,gnncAlert.CANCEL]);
+							
+						},[gnncAlert.YES,gnncAlert.CANCEL]);
+				} 
+				else if(itensCount > 1)
+				{
+					//permission
+					if(!gnncPermission.__access('safe-multi-del','a',true))
+						return;
+					
+					gnncAlert.__delete('Você deseja <b>excluir esses registros definitivamente</b> dos registros financeiros?' +
+						"\nTotal: <b>"+itensCount+'</b> itens selecionados.','Excluir',
+						function __eFinancialMult(event:gnncCloseEvent):void
+						{
+							if(event.detail != gnncAlert.YES)
+								return;
+							
+							gnncAlert.__delete('Lembre-se que depois dos dados apagados não será possível reverter. <b>Deseja continuar</b>?','Confirmação de exclusão',
+								function __eFinancial(event:gnncCloseEvent):void
+								{
+									
+									if(event.detail != gnncAlert.YES)
+										return;
+									
+									var ids:Array = new Array();
+									var idx:Array = new Array();
+									var haveSafeIn:Boolean  = false;
+									var haveSafeOut:Boolean = false;
+									var haveNote:Boolean    = false;
+									var haveTrans:Boolean   = false;
+									var haveFinal:Boolean   = false;
+									var o:Object;
+									itens = FINANCIAL_.selectedItems;
+									
+									for(i=0; i<itensCount; i++)
+									{
+										o = itens[i];
+										
+										if(o.MIX == 'FINANCIAL_NOTE')
+											haveNote    = true;
+										else if(o.MIX == 'FINANCIAL_TRANS')
+											haveTrans   = true;
+										else if(o.MIX == 'FINANCIAL' && Number(o.VALUE_IN )>0)
+											haveSafeIn  = true;
+										else if(o.MIX == 'FINANCIAL' && Number(o.VALUE_OUT)>0)
+											haveSafeOut = true;
+										
+										if(gnncDate.__isValid(o.DATE_FINAL))
+											haveFinal   = true;
+										
+										ids.push(o.ID);
+										idx.push(FINANCIAL_.dataProvider.getItemIndex(o));
+									}
+									
+									//permission
+									if(!gnncPermission.__access('safe-in','d',false)    && haveSafeIn===true ){
+										gnncPermission.__alert();
+										return;
+									}
+									if(!gnncPermission.__access('safe-out','d',false)   && haveSafeOut===true){
+										gnncPermission.__alert();
+										return;
+									}
+									if(!gnncPermission.__access('safe-note','d',false)  && haveNote===true){
+										gnncPermission.__alert();
+										return;
+									}
+									if(!gnncPermission.__access('safe-trans','d',false) && haveTrans===true){
+										gnncPermission.__alert();
+										return;
+									}
+									if(haveFinal){
+										new gnncAlert().__alert('Lançamentos <b>faturados</b> (baixados) não podem ser excluídos para manter a integridade do sistema.');
+										return;
+									}
+									
+									loading(true);
+									
+									function __functionResultMultDelete(e:*=null):void
+									{
+										__clearMultiSelect();//remover selecao
+										
+										var del:Array = idx.sort(Array.NUMERIC); //organiza em ordem crescente
+										del = del.reverse(); //inverte para comecar de baixo para cima
+										for(i=0; i<itensCount; i++)
+											FINANCIAL_.dataProvider.removeItemAt(del[i]);
+										
+										_financial.DATA_ARR = new ArrayCollection(FINANCIAL_.dataProvider.toArray());
+										loading(false);
+									}
+									function __functionFaultMultDelete(e:*=null):void{
+										loading(false);
+									}
+									
+									sql = " DELETE FROM dbd_financial where ID IN ("+ids.join(',')+") ";
+									_connExec.__sql(sql,'Dados deletados.','',__functionResultMultDelete,__functionFaultMultDelete);
+									
+								},[gnncAlert.YES,gnncAlert.CANCEL]);
+							
+						},[gnncAlert.YES,gnncAlert.CANCEL]);
+				}
+			}
+			
+			private function __financialDateFinal(e:*=null):void
+			{
+				if(!checkDataList(false,true,false))
+					return;
+				
+				if(!checkDataType(true,false,false,true,true,true))
+					return;
+				
+				var objDat:Object         = FINANCIAL_.selectedItem;
+				var idxDat:int            = FINANCIAL_.selectedIndex;
+				var idxArr:int            = _financial.DATA_ARR.getItemIndex(objDat);
+				var itens:Vector.<Object> = FINANCIAL_.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				//permission
+				if(!gnncPermission.__access('safe-final','a',true))
+					return;
+				
+				/*if(objDat.MIX == 'FINANCIAL_NOTE'){
+				return;
+				}*/
+				if(!gnncDate.__isNull(objDat.DATE_CANCELED)){
+					new gnncAlert().__alert('Lançamento cancelado.');
+					return;
+				}
+				if(!gnncDate.__isNull(objDat.DATE_FINAL)){
+					gnncAlert.YES_LABEL = 'Visualizar lançamento';
+					gnncAlert.__alert("Lançamento já está faturado (baixado).\nClique em visualizar.",'',
+						function(e:gnncCloseEvent):void{
+							if(e.detail === gnncAlert.YES)
+								__financialView();
+						},[gnncAlert.YES,gnncAlert.OK]
+					);
+					return;
+				}
+				
+				var p:newFinancialPay = new newFinancialPay();
+				p._tableFinancial = new table_financial(objDat.ID);
+				p.selectedItem = objDat;
+				new gnncPopUp().__creation(p,true,false,removePopUp);
+				function removePopUp(e:FlexEvent):void
+				{ 
+					if(p._change){ 
+						updateItemRender([objDat.ID],null,p._keyFinancial);
+						//__clearMultiSelect();
+					}
+				}
+			}
+			
+			private function __financialDateFinalRemove():void
+			{
+				if(!checkDataList(false,true,false))
+					return;
+				
+				if(!checkDataType(true,false,false,false,true,true))
+					return;
+				
+				var objDat:Object         = FINANCIAL_.selectedItem;
+				var idxDat:int            = FINANCIAL_.selectedIndex;
+				var idxArr:int            = _financial.DATA_ARR.getItemIndex(objDat);
+				var itens:Vector.<Object> = FINANCIAL_.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				//não pode dar baixa com a data de amanhã
+				var DToday:Date		= gnncGlobalStatic._dateToday !== null ? gnncData.__clone(gnncGlobalStatic._dateToday) as Date: _today;
+				var DFinal:Date		= gnncDate.__string2Date(objDat.DATE_FINAL);
+				//var DInsert:Date	= gnncDate.__string2Date(OBJ.DATE);
+				
+				//Zera as horas
+				DToday.hours 		= 0;
+				DToday.minutes 		= 0;
+				DToday.seconds 		= 0;
+				DToday.milliseconds = 0;
+				//Zera as horas
+				DFinal.hours 		= 0;
+				DFinal.minutes 		= 0;
+				DFinal.seconds 		= 0;
+				DFinal.milliseconds = 0;
+				
+				if(objDat.MIX == 'FINANCIAL')//remove final | remove baixa
+				{
+					//permission
+					if(!gnncPermission.__access('safe-in-remove-final','a',false) && Number(objDat.VALUE_IN) > 0 ){
+						gnncPermission.__alertAlt('Sem permissão para remoção de receita.');
+						return;
+					}
+					if(!gnncPermission.__access('safe-out-remove-final','a',false) && Number(objDat.VALUE_OUT) > 0 ){
+						gnncPermission.__alertAlt('Sem permissão para remoção de despesa.');
+						return;
+					}
+					if(gnncDate.__isNull(objDat.DATE_FINAL)){
+						new gnncAlert().__alert('Lançamento não faturado (baixado).');
+						return;
+					}
+					if( DFinal.time !== DToday.time && gnncDate.__isValid(objDat.DATE_FINAL) ){
+						gnncPermission.__alertSystemNoAllowed();
+						return;
+					}
+				}
+				
+				new gnncAlert().__error("<b>Este procedimento não é recomendado.</b>"+
+					"\nDeseja remover o faturamento deste lançamento? É o registro que comprova o pagamento e a operação financeira.",'Remover faturamento',
+					function(event:gnncCloseEvent):void
+					{
+						if(event.detail != gnncAlert.YES)
+							return;
+						
+						loading(true);
+						
+						var v:Array = new Array
+						([
+							"PAY_TYPE      = ''",
+							"VALUE_IN_PAY  = '0'",
+							"VALUE_OUT_PAY = '0'",
+							//desconto e juros
+							"DISCOUNT_PAY  = '0'", 
+							"FINE_PAY      = '0'", 
+							//"DISCOUNT_VALUE = '0'",
+							//"DISCOUNT_PERCENT = '0'",
+							"DATE_FINAL    = '0000-00-00 00:00:00'"
+						]);
+						
+						var sql:String = new gnncSql().__UPDATE(new table_financial(objDat.ID),null,false,v);
+						_connExec.__sql(sql,'','',__fResult,__fFault);
+						
+						function __fResult(e:*):void
+						{
+							var scroll:gnncScrollPosition = new gnncScrollPosition();
+							scroll.__getListValues(FINANCIAL_);
+							loading(false);
+							
+							var o:Object 		 = objDat;
+							o.PAY_TYPE 	         = ''; 
+							o.VALUE_IN_PAY 		 = '0'; 
+							o.VALUE_OUT_PAY 	 = '0'; 
+							//desconto e juros
+							o.DISCOUNT_PAY       = '0'; 
+							o.FINE_PAY           = '0'; 
+							//o.DISCOUNT_VALUE 	 = '0'; 
+							//o.DISCOUNT_PERCENT = '0'; 
+							o.DATE_FINAL 		 = '0000-00-00 00:00:00'; 
+							
+							FINANCIAL_.dataProvider.setItemAt(o,idxDat);
+							
+							_financial.DATA_ARR.setItemAt(o,idxArr);
+							_financial.DATA_ARR.refresh();
+							
+							scroll.__setListValues(FINANCIAL_);
+						}
+						function __fFault(e:*):void{ 
+							loading(false);
+						}					
+						
+					},[gnncAlert.YES,gnncAlert.CANCEL]);
+				
+			}
+			
+			private function __financialDateCanceled():void
+			{
+				if(!checkDataList(false,true,false))
+					return;
+				
+				if(!checkDataType(true,true,false,true,true,true))
+					return;
+				
+				var objDat:Object         = FINANCIAL_.selectedItem;
+				var idxDat:int            = FINANCIAL_.selectedIndex;
+				var idxArr:int            = _financial.DATA_ARR.getItemIndex(objDat);
+				var itens:Vector.<Object> = FINANCIAL_.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				//permission
+				if(!gnncPermission.__access('safe-cancel','a',true))
+					return;
+				
+				/*if(objDat.MIX == 'FINANCIAL_NOTE'){
+				new gnncAlert().__alert('Anotações não possuem essa opção.');
+				return;
+				}*/
+				
+				//if( (DFinal.time > DToday.time || DFinal.time < DToday.time ) && gnncDate.__isValid(OBJ.DATE_FINAL))
+				/* if( DFinal.time !== DToday.time && gnncDate.__isValid(OBJ.DATE_FINAL) ){
+				gnncPermission.__alertSystemNoAllowed();
+				return;
+				}*/
+				
+				var msg:String = '';
+				
+				if(gnncDate.__isValid(objDat.DATE_END)==true)
+					msg = "<b>Este lançamento está cancelado.</b>\nDeseja remover o cancelamento?";
+				else
+					msg = "<b>Deseja cancelar</b> este lançamento?";
+				
+				gnncAlert.__alert(msg,'Cancelamento',
+					function __eFinancial(event:gnncCloseEvent):void
+					{
+						if(event.detail != gnncAlert.YES)
+							return;
+						
+						if( Number(objDat.VALUE_IN_PAY) > 0 || Number(objDat.VALUE_OUT_PAY) > 0 )
+						{
+							gnncAlert.__alert("Para cancelar é necessário remover o <b>faturamento</b> (baixa) do pagamento.\nDeseja prosseguir?",'Cancelar lançamento',
+								function __fClose(event:gnncCloseEvent):void{					
+									if(event.detail == gnncAlert.YES)
+										__financialDateCanceledAction(objDat,idxDat,idxArr);
+								}
+								,[gnncAlert.YES,gnncAlert.CANCEL]);
+						}
+						else{
+							__financialDateCanceledAction(objDat,idxDat,idxArr);
+						}
+						
+					},[gnncAlert.YES,gnncAlert.CANCEL]);
+			}
+			
+			//sql para cancelamento ou remoção do cancelamento do lançamento
+			private function __financialDateCanceledAction(objDat:Object,IDXDATP:uint,IDXARRA:uint):void
+			{
+				//permission
+				if(Number(objDat.VALUE_IN) > 0){
+					if(!gnncPermission.__access('safe-in-remove-final','a',false) && Number(objDat.VALUE_IN_PAY) > 0 ){
+						gnncPermission.__alert();
+						return;
+					}}
+				//permission
+				if(Number(objDat.VALUE_OUT) > 0){
+					if(!gnncPermission.__access('safe-out-remove-final','a',false) && Number(objDat.VALUE_OUT_PAY) > 0 ){
+						gnncPermission.__alert();
+						return;
+					}}
+				
+				//não pode dar baixa com a data de amanhã
+				var DToday:Date		= gnncGlobalStatic._dateToday !== null ? gnncData.__clone(gnncGlobalStatic._dateToday) as Date : _today;
+				var DFinal:Date		= gnncDate.__string2Date(objDat.DATE_FINAL);
+				
+				//Zera as horas
+				DToday.hours 		= 0;
+				DToday.minutes 		= 0;
+				DToday.seconds 		= 0;
+				DToday.milliseconds = 0;
+				//Zera as horas
+				DFinal.hours 		= 0;
+				DFinal.minutes 		= 0;
+				DFinal.seconds 		= 0;
+				DFinal.milliseconds = 0;
+				
+				//não deixa cancelar ou remover baixa se a data é de ontem em diante
+				if( DFinal.time !== DToday.time && gnncDate.__isValid(objDat.DATE_FINAL) ){
+					gnncPermission.__alertSystemNoAllowed();
+					return;
+				}
+				
+				var _sql:String = '';
+				var _tableTrans:table_financial = new table_financial();
+				_tableTrans.KEY_FINANCIAL = objDat.KEY_FINANCIAL;
+				
+				//não foi cancelado
+				if(gnncDate.__isNull(objDat.DATE_CANCELED))
+				{
+					function __fResult(e:*):void
+					{
+						loading(false);
+						var o:Object = FINANCIAL_.dataProvider.getItemAt(IDXDATP);
+						o.DATE_CANCELED = gnncDate.__date2String(_today);
+						o.DATE_FINAL 	= '0000-00-00 00:00:00';
+						o.VALUE_IN_PAY 	= 0;
+						o.VALUE_OUT_PAY = 0;
+						o.DISCOUNT_PAY  = 0; 
+						o.FINE_PAY      = 0; 
+						
+						FINANCIAL_.dataProvider.setItemAt(o,IDXDATP);
+						//FINANCIAL_.selectedIndex = IDXDATP;
+						
+						_financial.DATA_ARR = new ArrayCollection(FINANCIAL_.dataProvider.toArray());
+						_financial.DATA_ARR.refresh();
+					}
+					
+					function __fFault(e:*):void{
+						loading(false);
+					}
+					
+					var _values:Array = new Array
+						([
+							"PAY_TYPE      = ''",
+							"VALUE_IN_PAY  = '0'",
+							"VALUE_OUT_PAY = '0'",
+							//desconto e juros
+							"DISCOUNT_PAY  = '0'", 
+							"FINE_PAY      = '0'", 
+							//"DISCOUNT_VALUE = '0'",
+							//"DISCOUNT_PERCENT = '0'",
+							"DATE_FINAL    = '0000-00-00 00:00:00'",
+							"DATE_CANCELED = NOW()"
+						]);
+					
+					//Verifica se é uma transferência, ou dados relacionados à uma transferência
+					if(objDat.MIX == 'FINANCIAL_TRANS' && objDat.IS_TRANS == 1){
+						//_sql = new gnncSql().__UPDATE(new table_financial(),_tableTrans,false,_values);
+						new gnncAlert().__alert('Cancelamento de transferências está temporariamente desabilitada.');
+						return;
+					}else{
+						loading(true);
+						_sql = new gnncSql().__UPDATE(new table_financial(objDat.ID),null,false,_values);
+						_connExec.__sql(_sql,'','',__fResult,__fFault);
+					}
+				}
+					//se quer remover o cancelamento do lançamento
+				else
+				{
+					function __fResultRemoveCancel(e:*):void
+					{
+						loading(false);
+						var o:Object = FINANCIAL_.dataProvider.getItemAt(IDXDATP);
+						o.DATE_CANCELED = '0000-00-00 00:00:00';
+						o.DATE_FINAL 	= '0000-00-00 00:00:00';
+						o.VALUE_IN_PAY 	= 0;
+						o.VALUE_OUT_PAY = 0;
+						o.DISCOUNT_PAY  = 0; 
+						o.FINE_PAY      = 0; 
+						
+						FINANCIAL_.dataProvider.setItemAt(o,IDXDATP);
+						//FINANCIAL_.selectedIndex = IDXDATP;
+						
+						_financial.DATA_ARR = new ArrayCollection(FINANCIAL_.dataProvider.toArray());
+						_financial.DATA_ARR.refresh();
+					}
+					
+					function __fFaultRemoveCancel(e:*):void{
+						loading(false);
+					}
+					
+					var _valuesRemoveCancel:Array = new Array ([ "DATE_CANCELED = '0000-00-00 00:00:00'" ]);
+					
+					if(objDat.MIX == 'FINANCIAL_TRANS' && objDat.IS_TRANS == 1)
+					{
+						//_sql  = new gnncSql().__UPDATE(new table_financial(),_tableTrans,false,_values2) + gnncGlobalStatic._breakSql;
+						//_sql += " UPDATE dbd_financial SET VALUE_OUT_PAY = IF(VALUE_OUT > 0,(VALUE_OUT-DISCOUNT_VALUE),0), VALUE_IN_PAY = IF(VALUE_IN > 0,(VALUE_IN-DISCOUNT_VALUE),0), DATE_FINAL = NOW() WHERE MIX = 'FINANCIAL_TRANS' AND KEY_FINANCIAL = '"+objDat.KEY_FINANCIAL+"' " + gnncGlobalStatic._breakSql ;
+						//_sql += " UPDATE dbd_financial SET VALUE_OUT_PAY = VALUE_OUT, DATE_FINAL = NOW() WHERE IS_TAX = 1 AND KEY_FINANCIAL = '"+objDat.KEY_FINANCIAL+"' ";
+						new gnncAlert().__alert('Remoção do cancelamento de transferências está temporariamente desabilitada.');
+						return;
+					}
+					else{
+						loading(true);
+						_sql = new gnncSql().__UPDATE(new table_financial(objDat.ID),null,false,_valuesRemoveCancel);
+						_connExec.__sql(_sql,'','',__fResultRemoveCancel,__fFaultRemoveCancel);
+					}
+				}
+			}
+			
+			
+			private function __financialActive(autoChange_:Boolean,activeValue_:uint=1):void
+			{
+				if(!checkDataList(false,true,false))
+					return;
+				
+				if(!checkDataType(true,true,false,true,true,true))
+					return;
+				
+				var objDat:Object         = FINANCIAL_.selectedItem;
+				var idxDat:int            = FINANCIAL_.selectedIndex;
+				var idxArr:int            = _financial.DATA_ARR.getItemIndex(objDat);
+				var itens:Vector.<Object> = FINANCIAL_.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				//permission
+				if(!gnncPermission.__access('safe-alert','a',true))
+					return;
+				/*if(objDat.MIX == 'FINANCIAL_NOTE'){
+				new gnncAlert().__alert('Notas não possuem essa opção.');
+				return;
+				}*/
+				
+				
+				var msm:String = '';
+				
+				if(uint(objDat.ACTIVE)==0)
+					msm = "Deseja continuar com a marcação de pendência?";
+				else
+					msm = "Este lançamento está marcado como pendente. <b>Deseja remover a marcação de pendência</b>?";
+				
+				gnncAlert.reset();
+				gnncAlert.__alert(msm,'Pendência',
+					function __eFinancial(event:gnncCloseEvent):void
+					{
+						if(event.detail != gnncAlert.YES)
+							return;
+						
+						loading(true);
+						
+						var _active:uint = 0;
+						
+						if(autoChange_)
+							_active = Number(objDat.ACTIVE) == 0 ? 1 : 0 ;
+						else
+							_active = activeValue_;
+						
+						var o:Object = new Object();
+						o.ID		 = objDat.ID;
+						o._TABLE	 = objDat._TABLE;
+						
+						var _sql:String = new gnncSql().__UPDATE(new table_financial(objDat.ID),null,false,[" ACTIVE = '"+_active+"' "]);
+						_connExec.__sql(_sql,'','',__fResult,__fFault);
+						
+						function __fResult(e:*=null):void
+						{
+							if(idxDat<0){
+								loading(false);
+								return;
+							}
+							
+							var gnncScroll:gnncScrollPosition = new gnncScrollPosition();
+							var o:Object = FINANCIAL_.dataProvider.getItemAt(idxDat);
+							
+							gnncScroll.__getListValues(FINANCIAL_,true);
+							o.ACTIVE = _active;
+							FINANCIAL_.dataProvider.setItemAt(o,idxDat);
+							
+							_financial.DATA_ARR.setItemAt(o,idxArr);
+							_financial.DATA_ARR.refresh();
+							
+							gnncScroll.__setListValues(FINANCIAL_);
+							
+							loading(false);
+						}
+						
+						function __fFault(e:*=null):void{
+							loading(false);
+						}
+					}
+					,[gnncAlert.YES,gnncAlert.CANCEL]);
+			}
+			
+			private function __financialReceipt():void
+			{
+				if(!checkDataList(false,true,false))
+					return;
+				
+				if(!checkDataType(true,true,false,true,true,true))
+					return;
+				
+				var objDat:Object         = FINANCIAL_.selectedItem;
+				var idxDat:int            = FINANCIAL_.selectedIndex;
+				var idxArr:int            = _financial.DATA_ARR.getItemIndex(objDat);
+				var itens:Vector.<Object> = FINANCIAL_.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				//permission
+				if(!gnncPermission.__access('safe-receipt','a',false) && !gnncPermission.__access('safe-receipt-today','a',false)){
+					new gnncAlert().__alert(gnncPermission._alertNoPermission);
+					return;
+				}
+				
+				/*if(objDat.MIX == 'FINANCIAL_NOTE'){
+				new gnncAlert().__alert('Nota não gera recibo.');
+				return;
+				}*/
+				if(gnncDate.__isNull(objDat.DATE_FINAL)){
+					new gnncAlert().__alert('É preciso <b>faturar</b> (baixar) no pagamento antes de emitir o recibo.');
+					return;
+				}
+				
+				var p:newFinancialReceipt = new newFinancialReceipt();
+				p._tableFinancial = new table_financial(objDat.ID);
+				new gnncPopUp().__creation(p,true,false);
+			}
+			
+			private function __newClient():void
+			{
+				var easy:Boolean = false;
+				var t:table_client = new table_client();
+				t.COMPANY = 1 ;
+				
+				if(currentState=='easy')
+				{
+					easy = true;
+					var g:newClientQuick = new newClientQuick();
+					g._tableClient = t;
+					g.isPopUp = true;
+					g.showSelectCompany = true;
+				}
+				else
+				{
+					easy = false;
+					var p:newClient = new newClient();
+					p._TABLE_CLIENT = t;
+					p.isPopUp = true;
+					p.showSelectCompany = true;
+				}					
+				
+				new gnncPopUp().__creation( easy ? g : p , true, false );
+				
+				//company:Boolean,simple:Boolean
+				/*
+				var t:table_client = new table_client();
+				t.COMPANY = company ? 1 : 0 ;
+				
+				var p:newClient = new newClient();
+				p._TABLE_CLIENT = t;
+				p.isPopUp = true;
+				
+				var g:newClientQuick = new newClientQuick();
+				g._tableClient = t;
+				g.isPopUp = true;
+				
+				new gnncPopUp().__creation( simple ? g : p ,true,false);
+				*/
+			}
+			
+			private function __changeMassive():void
+			{
+				var objDat:Object         = FINANCIAL_.selectedItem;
+				var idxDat:int            = FINANCIAL_.selectedIndex;
+				var idxArr:int            = _financial.DATA_ARR.getItemIndex(objDat);
+				var itens:Vector.<Object> = FINANCIAL_.selectedItems;
+				var itensCount:uint       = itens.length;
+				
+				if( itensCount < 2 ){
+					new gnncNotification().__show('Selecione','Selecione mais de um lançamento na listagem.',gnncEmbedBlackWhite.bw_all_32);
+					return;
+				}
+				
+				if(!checkDataList(false,true,true))
+					return;
+				
+				if(!checkDataType(true,false,false,false,false,false))
+					return;
+				
+				//permission
+				if(!gnncPermission.__access('safe-massive-change','a',true))
+					return;
+				
+				var o:Object; 
+				var s:String;
+				var sql:Array = new Array();
+				var haveFinal:uint = 0;
+				var haveCanceled:uint = 0;
+				var allowText:Array = new Array();
+				var mess:Boolean = false;
+				var ids:Array = new Array();
+				var t:table_financial;
+				
+				for(var i:uint=0; i<itensCount; i++){
+
+					objDat = itens[i];
+
+					if(gnncDate.__isValid(objDat.DATE_FINAL)){
+						haveFinal++;
+						continue;
+					}
+					if(gnncDate.__isValid(objDat.DATE_CANCELED)){
+						haveCanceled++;
+						continue;
+					}
+
+					o = new Object();
+					o._TABLE = "FINANCIAL";
+					o.ID = objDat.ID;
+					
+					ids.push(o.ID);
+									
+					if(HsetVALUE_.selected && gnncDataNumber.__safeClear(setVALUE_.text)>0){
+						if(mess==false)
+							allowText.push('Alterar <b>Valor</b>: R$ '+setVALUE_.text);
+						if(Number(objDat.VALUE_IN)>0)
+							o.VALUE_IN = gnncDataNumber.__safeClear(setVALUE_.text);
+						else if(Number(objDat.VALUE_OUT)>0)
+							o.VALUE_OUT = gnncDataNumber.__safeClear(setVALUE_.text);
+					}
+					
+					if(HsetACCOUNT_.selected && setACCOUNT_.selectedIndex > -1){
+						if(mess==false)
+							allowText.push('Alterar <b>Conta</b>: '+(setACCOUNT_.selectedItem.NAME));
+						o.ID_FINANCIAL_ACCOUNT = setACCOUNT_.selectedItem.ID;
+					}
+					
+					//o.ID_DEPARTAMENT = 0;
+					//o.ID_GROUP = 0;
+					
+					if(HsetClient_.selected && setCLIENT_.value > 0){
+						if(mess==false)
+							allowText.push('Alterar <b>Cliente</b>: '+setCLIENT_.nameClient);
+						o.ID_CLIENT = setCLIENT_.value;
+					}
+					
+					//o.DOCUMENT_TYPE = 0;
+					//o.DOCUMENT_BANK = '';
+					
+					if(HsetDAY_END_.selected){
+						if(mess==false)
+							allowText.push('Alterar <b>Dia de Vencimento</b>: Dia '+setDAY_END_.value);
+						o.DATE_END = String(objDat.DATE_END).substr(0,8)+gnncDataNumber.__setZero(setDAY_END_.value)+String(objDat.DATE_END).substring(10);
+					}
+					if(HsetFINE_PERCENT_.selected){
+						if(mess==false){
+							if(gnncDataNumber.__safeClear(setFINE_PERCENT_.text,3)>0)
+								allowText.push('Alterar Juro: '+setFINE_PERCENT_.text+' '+setFINE_PERCENT_TIME_.selectedItem.label);
+							else
+								allowText.push('(-) Remover <b>Juro</b>');
+						}
+						o.FINE_PERCENT = gnncDataNumber.__safeClear(setFINE_PERCENT_.text,3);
+						o.FINE_PERCENT_TIME = setFINE_PERCENT_TIME_.selectedIndex>-1?Number(setFINE_PERCENT_TIME_.selectedItem.data):1;
+					}
+					if(HsetFINE_VALUE_.selected){
+						if(mess==false){
+							if(gnncDataNumber.__safeClear(setFINE_VALUE_.text,3)>0)
+								allowText.push('Alterar Multa Fixa: R$ '+setFINE_VALUE_.text);
+							else
+								allowText.push('(-) Remover <b>Multa Fixa</b>');
+						}
+						o.FINE_VALUE = gnncDataNumber.__safeClear(setFINE_VALUE_.text,2);
+					}
+					if(HsetFINE_VALUE_PERCENT_.selected){
+						if(mess==false){
+							if(gnncDataNumber.__safeClear(setFINE_VALUE_PERCENT_.text,3)>0)
+								allowText.push('Alterar Multa Percentual: '+setFINE_VALUE_PERCENT_.text);
+							else
+								allowText.push('(-) Remover <b>Multa Percentual</b>');
+						}
+						o.FINE_VALUE_PERCENT = gnncDataNumber.__safeClear(setFINE_VALUE_PERCENT_.text,3);
+					}
+					if(HsetDISCOUNT_PUNCTUALITY_.selected){
+						if(mess==false){
+							if(gnncDataNumber.__safeClear(setDISCOUNT_PUNCTUALITY_.text,3)>0)
+								allowText.push('Alterar Desconto de Pontualidade: R$ '+setDISCOUNT_PUNCTUALITY_.text);
+							else
+								allowText.push('(-) Remover <b>Desconto de Pontualidade</b>');
+						}
+						o.DISCOUNT_PUNCTUALITY = gnncDataNumber.__safeClear(setDISCOUNT_PUNCTUALITY_.text,3);
+					}
+					
+					if(HsetCOURSE_.selected){
+						if(mess==false){
+							if(int(setCOURSE_.getStyle('idCourse'))>0)
+								allowText.push('Alterar <b>Turma</b>: '+setCOURSE_.getStyle('nameCourse'));
+							else
+								allowText.push('(-) Remover <b>Turma</b>');
+						}
+						o.ID_PROJECT = int(setCOURSE_.getStyle('idCourse'));
+					}
+					
+					mess = true;
+					t = new table_financial(objDat.ID);
+					sql.push(new gnncSql().__UPDATE(o,t,true));
+				}
+				
+				if(allowText.length==0){
+					new gnncAlert().__alert('Selecione uma opção para executar mudanças em lote.');
+					return;
+				}
+				if((itensCount-(haveFinal+haveCanceled))<2){
+					new gnncAlert().__alert('Selecione mais de um registro válido para a alteração.');
+					return;
+				}
+
+				if(haveFinal> 0)
+					gnncPermission.__alertAlt('Lançamento(s) faturado(s) não pode(m) ser alterado(s) em lote. ('+haveFinal+')');
+				else if(haveCanceled > 0)
+					gnncPermission.__alertAlt('Lançamento(s) cancelado(s) não pode(m) ser alterado(s) em lote. ('+haveCanceled+')');				
+
+				gnncAlert.__delete('Você deseja alterar '+(itensCount-(haveFinal+haveCanceled))+' registro(s) <b>definitivamente</b>? As <b>alterações serão permanentes sem possibilidade de reversão</b>.'+"\n\n"+allowText.join("<br>")+'<br><br>Deseja continuar?','Alteração em Lote',
+					function __eFinancial(event:gnncCloseEvent):void
+					{
+						if(event.detail != gnncAlert.YES)
+							return;
+						
+						//new gnncAlert().__alert(sql.join(gnncGlobalStatic._breakSql+"\n"));
+						
+						loading(true);
+						_connExec = new gnncAMFPhp();
+						_connExec.__clear();
+						_connExec.__sql(sql.join(gnncGlobalStatic._breakSql+"\n"),'','',__fResult,__fFault);
+						
+						function __fResult(e:*):void
+						{
+							panelChange(false);
+							loading(false);
+							
+							updateItemRender(ids);
+						}
+						
+						function __fFault(e:*):void{
+							loading(false);
+						}
+ 
+						
+					}
+					,[gnncAlert.YES,gnncAlert.CANCEL]);
+				
+			}
+			
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		
+		<s:RadioButtonGroup id="SEARCH_PAY" />
+		<s:RadioButtonGroup id="courseClientGroup" />
+		<mx:Move id="movie" duration="500"/>
+		
+	</fx:Declarations>
+	<fx:Style>
+		.accordionH {
+			skin: ClassReference("GNNC.skin.accordion.skin_accordion_header");
+		}
+	</fx:Style>
+	
+	<s:states>
+		<s:State name="normal" />
+		<s:State name="easy" />
+	</s:states>
+	
+	<s:Rect width="100%" height="100%" fill="{new SolidColor(0xffffff)}" />
+	<elements:elementBarStatus width="67" height="100%" />
+	
+	<s:HGroup width="100%" height="100%" gap="0">
+		
+		<s:VGroup width="66" height="100%" gap="1" id="panelButtons_">
+			
+			<s:Button width="100%" height="60" toolTip="Cadastrar Receita" click="{__newFinancial(true)}"
+					  icon="{gnncEmbedBlackWhite.bw_financial_32_safe_in}" iconPlacement="top"
+					  skinClass="GNNC.skin.button.skin_buttonLink"/>
+			<s:Button width="100%" height="60" toolTip="Cadastrar Despesa" click="{__newFinancial(false)}"
+					  icon="{gnncEmbedBlackWhite.bw_financial_32_safe_out}" iconPlacement="top"
+					  skinClass="GNNC.skin.button.skin_buttonLink"/>
+			<s:Button width="100%" height="60" toolTip="Cadastrar Transferência" click="{__newFinancialTrans()}"
+					  icon="{gnncEmbedBlackWhite.bw_financial_32_safe_trans}" iconPlacement="top"
+					  skinClass="GNNC.skin.button.skin_buttonLink"/>
+			<s:Button width="100%" height="60" toolTip="Cadastrar Nota" click="{__newFinancialNote()}"
+					  icon="{gnncEmbedBlackWhite.bw_note_32_new}" iconPlacement="top"
+					  skinClass="GNNC.skin.button.skin_buttonLink"/>
+			
+			<elements:elementHLine height="3" _COLOR="0xeeeeee"/>
+			
+			<!-- s:Button width="100%" height="60" toolTip="Vincular" click="{__newFinancialConnection()}"
+			skinClass="GNNC.skin.button.skin_buttonLink" enabled="true"
+			icon="{gnncEmbedBlackWhite.bw_financial_32_safe_connection}" iconPlacement="top" excludeFrom="easy"/>
+			<s:Button width="100%" height="60" toolTip="Estorno" click="{__newFinancialReversal()}"
+			enabled="true" icon="{gnncEmbedBlackWhite.bw_financial_32_safe_reversal}"
+			iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" excludeFrom="easy"/ -->
+			
+			<s:Button  width="100%" height="60" click="{__newClient()}" toolTip="Novo Cadastro"
+					   icon="{gnncEmbedBlackWhite.bw_client_32_v2}" iconPlacement="top"
+					   skinClass="GNNC.skin.button.skin_buttonLink"/>
+			
+			<elements:elementHLine height="3" _COLOR="0xeeeeee"/>
+			
+			<s:HGroup width="100%" height="33" gap="1">
+				<s:Button id="btnView_" width="100%" height="33" click="{__financialView()}"
+						  icon="{gnncEmbedBlackWhite.bw_view_16}" iconPlacement="right"
+						  skinClass="GNNC.skin.button.skin_buttonLink" toolTip="Visualizar"/>
+				<s:Button id="btnEdit_" width="100%" height="33" click="{__editFinancial()}"
+						  icon="{gnncEmbedBlackWhite.bw_edit_16}" iconPlacement="right"
+						  skinClass="GNNC.skin.button.skin_buttonLink" toolTip="Editar"/>
+			</s:HGroup>
+			<s:HGroup width="100%" height="33" gap="1">
+				<s:Button id="btnAttach_" width="100%" height="33" click="{__newAttach()}"
+						  icon="{gnncEmbedBlackWhite.bw_attach_16}" iconPlacement="right"
+						  skinClass="GNNC.skin.button.skin_buttonLink"
+						  toolTip="Arquivo (anexar ao lançamento)"/>
+				<s:Button id="btnDel_" width="100%" height="100%" click="{__deleteFinancial()}"
+						  icon="{gnncEmbedBlackWhite.bw_delete_16}" iconPlacement="right"
+						  skinClass="GNNC.skin.button.skin_buttonLink" toolTip="Excluir"/>
+			</s:HGroup>
+			
+			<elements:elementHLine height="3" _COLOR="0xeeeeee"/>
+			
+			<s:Button width="100%" height="60" toolTip="Lançamentos de Turmas" click="{__financialCourseNew()}"
+					  icon="{gnncEmbedBlackWhite.bw_course_32}" iconPlacement="top"
+					  skinClass="GNNC.skin.button.skin_buttonLink"/>
+
+			
+			
+			<!-- elements:elementHLine height="3" _COLOR="0xeeeeee"/>
+			
+			<s:Button width="100%" height="60" toolTip="Hoje" click="{__financialToday()}"
+			icon="{gnncEmbedBlackWhite.bw_calendar_32_today}" iconPlacement="top"
+			skinClass="GNNC.skin.button.skin_buttonLink"/>
+			<s:Button width="100%" height="60" toolTip="Mês" click="{__financialList()}"
+			icon="{gnncEmbedBlackWhite.bw_calendar_32}" iconPlacement="top"
+			skinClass="GNNC.skin.button.skin_buttonLink"/ -->
+			
+		</s:VGroup>
+		
+		<elements:elementVLine width="1" />
+		
+		<s:Group width="230" height="100%">
+			<elements:elementBarStatus height="100%" width="230" alpha=".5"/>
+			<mx:Accordion id="panelLeft_" width="230" top="2" bottom="1" headerHeight="31" headerStyleName="accordionH" 
+						  fontSize="11" fontWeight="bold" contentBackgroundAlpha="0" borderVisible="false" openDuration="300" horizontalGap="0" verticalGap="-1">
+				
+				<s:NavigatorContent width="100%" height="100%" label="Pesquisa" fontWeight="normal"
+									icon="{gnncEmbedBlackWhite.bw_home_16}">
+					<s:Scroller width="100%" height="100%">
+						<s:VGroup width="100%" gap="1" paddingBottom="10" paddingLeft="10"
+								  paddingRight="10" paddingTop="10">
+							<s:Button id="ID_FINANCIAL_ACCOUNT_" width="100%" height="30"
+									  label="Conta / Banco" click="{__setAccount()}" fontWeight="bold"
+									  icon="{/*gnncEmbedBank.banrisul_16*/gnncEmbedBlackWhite.bw_financial_16_account}"
+									  showErrorTip="true" showInAutomationHierarchy="true"
+									  excludeFrom="easy"
+									  />
+							<!-- s:HGroup width="100%" gap="1">
+							<s:Button height="30" label="Vencidos" icon="{gnncEmbedBlackWhite.check_16_bw}" fontSize="11" width="100%" fontWeight="normal" click="{__financialListNoFinalOld()}" />
+							<s:Button height="30" label="Pendentes" icon="{gnncEmbedBlackWhite.check_16_yellow_ok}" fontSize="11" width="100%" fontWeight="normal" click="{__financialListActive1()}"/>
+							</s:HGroup -->
+							<s:Rect height="10"/>
+							<s:HGroup width="100%" gap="1" horizontalAlign="center">
+								<s:Button width="18" height="45" click="{__changeMonthPrev()}"
+										  icon="{gnncEmbedImage.PREV_16}"
+										  skinClass="GNNC.skin.button.skin_buttonLink"
+										  toolTip="Mês Anterior"/>
+								<s:HGroup width="100%" gap="1" horizontalAlign="center">
+									<elements:elementLabelFont id="MONTH_TXT_" fontSize="45"
+															   maxDisplayedLines="1" paddingTop="5"
+															   showTruncationTip="false" text=""
+															   textAlign="right"/>
+									<elements:elementLabelFont id="YEAR_TXT_" color="0x999999"
+															   fontSize="45" maxDisplayedLines="1"
+															   paddingTop="5" showTruncationTip="false"
+															   text="" textAlign="left"/>
+								</s:HGroup>
+								<s:Button width="18" height="45" click="{__changeMonthNext()}"
+										  icon="{gnncEmbedImage.NEXT_16}"
+										  skinClass="GNNC.skin.button.skin_buttonLink"
+										  toolTip="Próximo Mês"/>
+							</s:HGroup>
+							<mx:HSlider id="salesRangeDays_" width="100%" height="50" enabled="true"
+										labels="['1','5','10','15','20','25','31']" maximum="31"
+										minimum="1" snapInterval="1" thumbCount="2" tickInterval="1"
+										values="[1,31]"/>
+							<s:HGroup width="100%" gap="1" textAlign="center" verticalAlign="middle">
+								<!--s:Button height="30" id="MONTH_" fontSize="11" width="100%" fontWeight="bold" click="{__financialList()}" enabled="false"/-->
+								<s:Button width="30" height="30" label="Hoje, somente o dia atual."
+										  click="{__financialToday()}" fontWeight="bold"
+										  icon="{gnncEmbedBlackWhite.bw_calendar_16_today}"/>
+								<s:HGroup width="30" height="30" gap="0">
+									<s:Button width="30" height="30" label="Calendário..."
+											  click="{calendarShow_.displayPopUp=!calendarShow_.displayPopUp}"
+											  fontWeight="bold"
+											  icon="{gnncEmbedBlackWhite.bw_calendar_16}"/>
+									<s:PopUpAnchor id="calendarShow_" width="180" height="180"
+												   displayPopUp="false" popUpPosition="above">
+										<mx:DateChooser id="calendarShowFinancial_" width="180" height="180"
+														borderColor="0xAAAAAA" borderVisible="true"
+														change="{__financialList(calendarShowFinancial_.selectedDate); calendarShow_.displayPopUp = false;}"
+														firstDayOfWeek="0" fontSize="11"
+														rollOut="{calendarShow_.displayPopUp = false}"
+														selectedDate="{_today}" showToday="false"
+														yearNavigationEnabled="true"/>
+									</s:PopUpAnchor>
+								</s:HGroup>
+								<!-- Pesq. (Mês) -->
+								<s:Button width="100%" height="30" label="Pesquisar Mês"
+										  click="{__financialList()}" fontSize="11" fontWeight="bold"
+										  icon="{gnncEmbedBlackWhite.bw_search_16}"
+										  toolTip="Pesquisar (Mês)"/>
+							</s:HGroup> 
+							<elements:elementLabelDropShadow height="35" fontSize="13" fontWeight="normal"
+															 text="LANÇAMENTOS"/>
+							<s:HGroup width="100%" gap="1">
+								<s:VGroup width="20" gap="6">
+									<s:Image source="{gnncEmbedBlackWhite.bw_all_16}"/>
+									<s:Image source="{gnncEmbedBlackWhite.check_16_green}"/>
+									<s:Image source="{gnncEmbedBlackWhite.check_16_green_ok}"/>
+									<s:Image source="{gnncEmbedBlackWhite.check_16_bw_ok}"/>
+									<s:Image source="{gnncEmbedBlackWhite.check_16_pink_ok}"/>
+									<s:Rect height="10"/>
+									<s:Image source="{gnncEmbedBlackWhite.bw_financial_16_safe}"/>
+									<s:Image source="{gnncEmbedBlackWhite.bw_financial_16_safe_in}"/>
+									<s:Image source="{gnncEmbedBlackWhite.bw_financial_16_safe_out}"/>
+									<s:Image source="{gnncEmbedBlackWhite.bw_financial_16_safe_trans}"/>
+									<s:Image source="{gnncEmbedBlackWhite.bw_note_16}"/>
+									<s:Image source="{gnncEmbedBlackWhite.check_16_yellow_ok}"/>
+								</s:VGroup>
+								<s:VGroup width="100%" gap="6">
+									<s:RadioButton id="CDATE_ALL" height="16" label="Todos"
+												   groupName="DATE" selected="true"/>
+									<s:RadioButton id="CDATE_FINAL_NO" height="16"
+												   label="À pagar/receber" groupName="DATE"/>
+									<s:RadioButton id="CDATE_FINAL" height="16" label="Pagos/recebidos (faturados)"
+												   groupName="DATE"/>
+									<s:RadioButton id="CDATE_CANCELED" height="16" label="Cancelados"
+												   groupName="DATE"/>
+									<s:RadioButton id="IS_REVERSAL" height="16" label="Estornos"
+												   groupName="DATE"/>
+									<s:Rect height="10"/>
+									<s:RadioButton id="CSAFE_ALL" height="16" label="Todos"
+												   groupName="SAFE" selected="true"/>
+									<s:RadioButton id="CSAFE_IN" height="16" label="Receita"
+												   groupName="SAFE"/>
+									<s:RadioButton id="CSAFE_OUT" height="16" label="Despesa"
+												   groupName="SAFE"/>
+									<s:RadioButton id="CSAFE_TRANS" height="16" label="Transferência"
+												   groupName="SAFE"/>
+									<s:RadioButton id="CSAFE_NOTE" height="16" label="Nota"
+												   groupName="SAFE"/>
+									<s:RadioButton id="CSAFE_URGENT" height="16" label="Pendente"
+												   groupName="SAFE"/>
+								</s:VGroup>
+							</s:HGroup>
+							
+						</s:VGroup>
+					</s:Scroller>
+				</s:NavigatorContent>
+				
+				<s:NavigatorContent width="100%" height="100%" label="Contas à Pagar / Receber"
+									contentBackgroundAlpha="1" fontWeight="normal"
+									icon="{gnncEmbedBlackWhite.bw_financial_16_safe}">
+					<s:Scroller width="100%" height="100%" horizontalScrollPolicy="off">
+						<s:VGroup width="100%" gap="1" paddingBottom="10" paddingLeft="10"
+								  paddingRight="10" paddingTop="10">
+							<s:Button width="100%" height="30" label="Contas à Pagar"
+									  click="{__financialLate(false,true)}" fontSize="11"
+									  fontWeight="normal"
+									  icon="{gnncEmbedBlackWhite.bw_financial_16_safe_out}" skinClass="GNNC.skin.button.skin_buttonTextLeft"/>
+							<s:Button width="100%" height="30" label="Contas à Receber"
+									  click="{__financialLate(true,false)}" fontSize="11"
+									  fontWeight="normal"
+									  icon="{gnncEmbedBlackWhite.bw_financial_16_safe_in}" skinClass="GNNC.skin.button.skin_buttonTextLeft"/>
+							<s:Button width="100%" height="30" label="Pagar e Receber"
+									  click="{__financialLate(true,true)}" fontSize="11"
+									  fontWeight="normal"
+									  icon="{gnncEmbedBlackWhite.bw_financial_16_safe}" skinClass="GNNC.skin.button.skin_buttonTextLeft"/>
+							<s:Button width="100%" height="30" label="Vencidos (Todos)"
+									  click="{__financialListNoFinalOld()}" fontSize="11"
+									  fontWeight="normal" icon="{gnncEmbedBlackWhite.check_16_bw}" skinClass="GNNC.skin.button.skin_buttonTextLeft"/>
+							<s:Button width="100%" height="30" label="Pendentes (Todos)"
+									  click="{__financialListNoFinalOld(null,false,'1')}" fontSize="11"
+									  fontWeight="normal" icon="{gnncEmbedBlackWhite.check_16_yellow_ok}" skinClass="GNNC.skin.button.skin_buttonTextLeft"/>
+							<s:Spacer height="5"/>
+							<elements:elementLabelDropShadow id="period_" height="35" fontSize="13"
+															 fontWeight="normal" text="PERÍODO"/>
+							<s:VGroup width="100%" gap="6">
+								<s:RadioButton height="16" label="Mês (atual e passados)"
+											   groupName="SEARCH_PAY" selected="false" value="0"/>
+								<s:RadioButton height="16" label="Mês (mês anterior e passado)"
+											   groupName="SEARCH_PAY" selected="false" value="7"/>
+								<s:RadioButton height="16" label="Mês (atual selecionado)"
+											   groupName="SEARCH_PAY" value="1" selected="true"/>
+								<s:RadioButton height="16" label="Mês (próximo mês)" groupName="SEARCH_PAY"
+											   value="2"/>
+								<s:RadioButton height="16" label="Semana (seg/dom)"
+											   groupName="SEARCH_PAY" value="3"/>
+								<s:RadioButton height="16" label="Semana (próxima)"
+											   groupName="SEARCH_PAY" value="4"/>
+								<s:RadioButton height="16" label="Hoje" groupName="SEARCH_PAY" value="5"/>
+								<s:RadioButton height="16" label="Amanhã" groupName="SEARCH_PAY"
+											   value="6"/>
+							</s:VGroup>
+						</s:VGroup>
+					</s:Scroller>
+				</s:NavigatorContent>
+				
+				<s:NavigatorContent width="100%" height="100%" label="Avançado"
+									contentBackgroundAlpha="1" fontWeight="normal"
+									icon="{gnncEmbedBlackWhite.bw_search_16}">
+					
+					
+					<s:Group left="0" top="0" right="0">
+						<elements:elementBarStatus width="100%" radiusX="3" radiusY="3"/>
+						<s:TabBar dataProvider="{panelSearch_}" height="30" width="100%"/>
+					</s:Group>
+					
+					<mx:ViewStack id="panelSearch_" width="100%" top="35" bottom="0">
+						
+						<s:NavigatorContent label="PESQUISA" width="100%" height="100%" creationPolicy="all" >
+							<s:Scroller left="1" top="1" right="1" bottom="1" horizontalScrollPolicy="off">
+								<s:VGroup width="100%" gap="1" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+									
+									
+									<s:Group width="100%" height="16" fontWeight="bold">
+										<s:Label width="100%" text="De"/>	
+										<s:Label width="100%" text="Até" textAlign="right"/>
+										<s:Label width="100%" maxDisplayedLines="1" showTruncationTip="true"
+												 text="{'('+(DateUtils.dateDiff(DateUtils.DAY_OF_MONTH,DATE_FROM_.selectedDate,DATE_TO_.selectedDate)+1)+' dias)'}"
+												 textAlign="center"/>	
+									</s:Group>
+									<s:HGroup width="100%" height="30" gap="1">
+										<gnncDateField4:gnncDateField4 id="DATE_FROM_" width="100%" height="25"
+																	   contentBackgroundAlpha="1"
+																	   creationComplete="{DATE_FROM_.selectedDate = gnncDate.__string2Date(_today.fullYear+'-01-01',false)}"
+																	   editable="false"
+																	   yearNavigationEnabled="true"/>
+										<gnncDateField4:gnncDateField4 id="DATE_TO_" width="100%" height="25"
+																	   contentBackgroundAlpha="1"
+																	   creationComplete="{DATE_TO_.selectedDate = gnncDate.__string2Date(_today.fullYear+'-12-31',false)}"
+																	   editable="false"
+																	   yearNavigationEnabled="true"/>
+									</s:HGroup>
+									<!-- s:Group width="100%" fontWeight="bold" height="16">
+									<s:Label text="" width="100%" />	
+									<s:Label text="" width="100%" textAlign="right"/>
+									<s:Label text="Valor R$" width="100%" maxDisplayedLines="1" showTruncationTip="true" textAlign="center"/>	
+									</s:Group -->
+									<s:HGroup width="100%" height="25" gap="1">
+										<s:TextInput id="VALUE_MIN_" width="100%" height="25"
+													 keyDown="{gnncDataNumber.__safeKeyEvent(event,true)}"
+													 keyUp="{gnncDataNumber.__safeKeyEvent(event,true)}"
+													 text="0,00" textAlign="center" toolTip="Maior igual (R$)(sem juro+multa)"/>
+										<s:Group width="24" height="25" toolTip="Maior igual (R$)">
+											<s:BitmapImage left="4" top="4"
+														   source="{gnncEmbedBlackWhite.bw_financial_16_safe}"/>
+										</s:Group>
+										<s:TextInput id="VALUE_MAX_" width="100%" height="25"
+													 keyDown="{gnncDataNumber.__safeKeyEvent(event,true)}"
+													 keyUp="{gnncDataNumber.__safeKeyEvent(event,true)}"
+													 text="0,00" textAlign="center" toolTip="Menor igual (R$)(sem juro+multa)"/>
+										<s:Group width="24" height="25" toolTip="Menor igual (R$)">
+											<s:BitmapImage left="4" top="4"
+														   source="{gnncEmbedBlackWhite.bw_financial_16_safe}"/>
+										</s:Group>
+									</s:HGroup>
+									<elements:elementHLine height="10" _COLOR="0xDDDDDD"/>
+									<s:HGroup width="100%" height="25" gap="2" verticalAlign="middle">
+										<s:Image source="{gnncEmbedBlackWhite.bw_financial_16_account}"
+												 toolTip="{FINANCIAL_ACCOUNT_.selectedIndex&gt;-1?'Contas, ID: '+FINANCIAL_ACCOUNT_.selectedItem.ID:'Contas, ID: 0'}"/>
+										<s:Rect width="3"/>
+										<s:DropDownList id="FINANCIAL_ACCOUNT_" width="100%" height="25"
+														dataProvider="{_gnncGlobal._FINANCIAL_ACCOUNT.DATA_ARR}"
+														itemRenderer="GNNC.modules.financial.itemRender.itemRender_financialAccount_forList"
+														labelField="NAME" prompt="Conta..."/>
+										<s:Button width="25" height="25"
+												  click="{FINANCIAL_ACCOUNT_.selectedIndex=-1}"
+												  icon="{gnncEmbedBlackWhite.bw_clear_14_selection}"
+												  skinClass="GNNC.skin.button.skin_buttonLink"/>
+									</s:HGroup>
+									<select:conSelect_DEPARTAMENT id="DEPARTAMENT_" width="100%" height="25"
+																  _ADD="false" prompt="Centro de Custo..."/>
+									<select:conSelect_GROUP id="FINANCIAL_IN_" width="100%" height="25"
+															_ADD="false" _FILTER="true" _MIX="FINANCIAL_IN" enabled="true"
+															prompt="Grupo de Receita..."
+															_CHANGE_EVENT="{function(event:IndexChangeEvent):void{ FINANCIAL_OUT_.value = 0} }"
+															/>
+									<!-- 
+									mouseMove="{FINANCIAL_IN_._FILTER = true}"
+									mouseOver="{FINANCIAL_IN_._FILTER = true}"
+									mouseOut= "{FINANCIAL_IN_._FILTER = false}"
+									-->
+									<select:conSelect_GROUP id="FINANCIAL_OUT_" width="100%" height="25"
+															_ADD="false" _FILTER="true" _MIX="FINANCIAL_OUT" enabled="true"
+															prompt="Grupo de Despesa..."
+															_CHANGE_EVENT="{function(event:IndexChangeEvent):void{ FINANCIAL_IN_.value = 0} }"
+															/>
+									<select:conSelect_CATEGORY id="CATEGORY_" width="100%" height="25"
+															   _ADD="false" _MIX="FINANCIAL"
+															   prompt="Categoria..."/>
+									<elements:elementHLine height="10" _COLOR="0xDDDDDD"/>
+									<s:HGroup width="100%" height="25" gap="2" verticalAlign="middle">
+										<s:DropDownList id="DOCUMENT_TYPE_" width="100%" height="25"
+														dataProvider="{gnncGlobalArrays._FINANCIAL_DOCUMENT_TYPE}"
+														prompt="Documento Tipo..."/>
+										<s:Button width="25" height="25"
+												  click="{DOCUMENT_TYPE_.selectedIndex=-1}"
+												  icon="{gnncEmbedBlackWhite.bw_clear_14_selection}"
+												  skinClass="GNNC.skin.button.skin_buttonLink"/>
+									</s:HGroup>
+									<s:HGroup width="100%" height="25" gap="2" verticalAlign="middle">
+										<s:DropDownList id="PAY_TYPE_" width="100%" height="25"
+														dataProvider="{gnncGlobalArrays._FINANCIAL_PAY_TYPE}"
+														prompt="Pagamento Tipo..."/>
+										<s:Button width="25" height="25" click="{PAY_TYPE_.selectedIndex=-1}"
+												  icon="{gnncEmbedBlackWhite.bw_clear_14_selection}"
+												  skinClass="GNNC.skin.button.skin_buttonLink"/>
+									</s:HGroup>
+									<elements:elementHLine height="10" _COLOR="0xDDDDDD"/>
+									<select:conSelect_GROUP id="GROUP_CLIENT_" height="25" _ADD="false"
+															_CHANGE_EVENT="{function ce(e:*):void{ CLIENT_._ID_GROUP = GROUP_CLIENT_.value}}"
+															_ICON="false" _MIX="CLIENT"
+															prompt="Grupo de Cliente"/>
+									<select:conSelect_CLIENT id="CLIENT_" _ADD="false"/>
+									<!-- s:Rect height="10"/>
+									<s:CheckBox label="Evitar Profissionais" 	click="{__searchClientItem()}" id="noGroupProfessional" />
+									<s:CheckBox label="Evitar Pacientes"		click="{__searchClientItem()}" id="noGroupPartient"/ -->
+									<elements:elementHLine height="10" _COLOR="0xDDDDDD"/>
+									<s:Label width="100%" height="16" maxDisplayedLines="1"
+											 showTruncationTip="true" text="Registro Nº, Nº Documento, ID, etc"
+											 verticalAlign="middle"/>
+									<s:TextInput id="WORD_" width="100%" height="25"
+												 enter="{__financialList(DATE_FROM_.selectedDate,DATE_TO_.selectedDate,true)}"/>
+									<elements:elementHLine height="10" _COLOR="0xDDDDDD"/>
+									<s:Button width="100%" height="30" label="Pesquisa Avançada"
+											  click="{__financialList(DATE_FROM_.selectedDate,DATE_TO_.selectedDate,true)}"
+											  fontSize="11" fontWeight="bold"
+											  icon="{gnncEmbedBlackWhite.bw_search_16}"/>
+									
+									
+								</s:VGroup>
+							</s:Scroller>
+						</s:NavigatorContent>
+						
+						
+						<s:NavigatorContent label="TURMAS" width="100%" height="100%" creationPolicy="all" >
+							<s:Scroller left="1" top="1" right="1" bottom="1" horizontalScrollPolicy="off">
+								<s:VGroup width="100%" gap="1" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+									
+									
+									
+									
+									<s:HGroup width="100%" height="30" gap="2" verticalAlign="middle">
+										<s:Button id="btnCourse_" width="100%" height="30"
+												  label="Selecionar a turma" click="{__courseSelected()}"
+												  fontWeight="bold" icon="{gnncEmbedBlackWhite.bw_course_16}"
+												  skinClass="GNNC.skin.button.skin_buttonBlue"/>
+										<s:Button width="30" height="30" click="{__courseClear()}"
+												  icon="{gnncEmbedBlackWhite.bw_clear_14_selection}"
+												  skinClass="GNNC.skin.button.skin_buttonLink"/>
+									</s:HGroup>
+									
+									
+									<s:Rect height="10"/>
+									
+									
+									<s:Label id="courseName_" width="100%" fontSize="13" fontWeight="bold" paddingLeft="5"
+											 maxDisplayedLines="1" paddingTop="4" showTruncationTip="true"
+											 text=""/>
+									<s:Label id="courseDateS_" width="100%" fontSize="11" fontWeight="normal" paddingLeft="5"
+											 maxDisplayedLines="1" paddingTop="4" showTruncationTip="true"
+											 text=""/>
+									<!-- s:Label id="courseDateE_" text="" fontSize="11" fontWeight="normal" width="100%" maxDisplayedLines="1" showTruncationTip="true"/ -->
+									<s:Label id="courseTeacher_" width="100%" color="0x777777" fontSize="11" paddingLeft="5"
+											 fontWeight="normal" maxDisplayedLines="1" paddingTop="4"
+											 showTruncationTip="true" text=""/>
+									
+									
+									<s:Rect height="10"/>
+									
+									<s:VGroup id="courseGroup_" width="100%" height="100%" gap="1" visible="false">
+										
+										<s:Group width="100%" height="30">
+											<elements:elementBarStatus width="100%" radiusX="3" radiusY="3"/>
+											<s:TabBar dataProvider="{panelCoursePeople_}" height="30" width="100%"/>
+										</s:Group>
+										
+										<mx:ViewStack id="panelCoursePeople_" width="100%" height="100%">
+											
+											<s:NavigatorContent label="PROFSS" width="100%" height="100%" creationPolicy="all" >
+												<s:Scroller left="1" top="1" right="1" bottom="1" horizontalScrollPolicy="off">
+													<s:VGroup width="100%" height="100%" gap="1" paddingBottom="10" paddingLeft="0" paddingRight="0" paddingTop="0">
+														<s:List id="listCourseTeacher_" width="100%" height="100%" minHeight="100" borderVisible="false" contentBackgroundAlpha="0"
+																horizontalScrollPolicy="off"
+																itemRenderer="GNNC.modules.client.itemRender.itemRender_clientName_forList"
+																click="{__financialListCourseSafe('TEACHER')}"
+																/>
+													</s:VGroup>
+												</s:Scroller>
+											</s:NavigatorContent>      
+											<s:NavigatorContent label="ALUNOS" width="100%" height="100%" creationPolicy="all" >
+												<s:Scroller left="1" top="1" right="1" bottom="1" horizontalScrollPolicy="off">
+													<s:VGroup width="100%" height="100%" gap="1" paddingBottom="10" paddingLeft="0" paddingRight="0" paddingTop="0">
+														<s:List id="listCourseStudent_" width="100%" height="100%" minHeight="100" borderVisible="false" contentBackgroundAlpha="0"
+																horizontalScrollPolicy="off"
+																itemRenderer="GNNC.modules.client.itemRender.itemRender_clientName_forList"
+																click="{__financialListCourseSafe('STUDENT')}"
+																/>
+													</s:VGroup>
+												</s:Scroller>
+											</s:NavigatorContent>
+											<s:NavigatorContent label="CURSOS" width="100%" height="100%" creationPolicy="all" >
+												<s:Scroller left="1" top="1" right="1" bottom="1" horizontalScrollPolicy="off">
+													<s:VGroup width="100%" height="100%" gap="1" paddingBottom="10" paddingLeft="0" paddingRight="0" paddingTop="0">
+														<s:List id="listCourse_" width="100%" height="100%" minHeight="100" borderVisible="false" contentBackgroundAlpha="0"
+																horizontalScrollPolicy="off"
+																itemRenderer="GNNC.skin.dropDownList.itemRender.itemRender_hierarchy_forList"
+																click="{__financialListCourseSafe('COURSE')}"
+																/>
+													</s:VGroup>
+												</s:Scroller>
+											</s:NavigatorContent>
+											
+										</mx:ViewStack>
+										
+										<elements:elementLabelFont fontSize="13" fontWeight="normal" text="CONSULTA VINCULADA" paddingBottom="5"/>
+										
+										<s:RadioButton label="Vinculada a este curso"     height="20" group="{courseClientGroup}" value="1" selected="true" 
+													   toolTip="Consultar este cadastro vinculado somente a este curso"/>
+										<s:RadioButton label="Vinculada a todos os cursos" height="20" group="{courseClientGroup}" value="2"
+													   toolTip="Consultar este cadastro relacionado a todos os cursos"
+													   />
+										<s:RadioButton label="Sem vínculo a cursos (CURSO = NULL)" height="20" group="{courseClientGroup}" value="3"
+													   toolTip="Trazer tudo (lançamentos) relacionado a este cadastro. Apenas sem relação com cursos."
+													   />
+										<s:RadioButton label="Apenas relacionado ao cadastro" height="20" group="{courseClientGroup}" value="5"
+													   toolTip="Trazer tudo (lançamentos) relacionado a este cadastro"
+													   />
+										
+									</s:VGroup>
+									
+								</s:VGroup>
+							</s:Scroller>
+						</s:NavigatorContent>
+						
+						
+						<s:NavigatorContent label="ORDEM" width="100%" height="100%" creationPolicy="all" >
+							<s:Scroller left="1" top="1" right="1" bottom="1" horizontalScrollPolicy="off">
+								<s:VGroup width="100%" gap="1" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+									
+									<elements:elementLabelFont fontSize="13" fontWeight="normal" text="ORDENAR POR" paddingBottom="15"/>
+									
+									<s:VGroup width="100%" gap="6">
+										<s:RadioButton id="CORDER_ALL" height="16" label="Data de Vencimento (Normal)"
+													   groupName="ORDER" selected="true" fontWeight="bold"/>
+										<s:RadioButton id="CORDER_FINAL" height="16"
+													   label="Data de Pagamento, Cancelado,..." groupName="ORDER" fontWeight="bold"/>
+										<s:RadioButton id="CORDER_LAST" height="16" label="Últimos Lançamentos"
+													   groupName="ORDER" toolTip="Últimos Lançamentos"/>
+										<s:RadioButton id="CORDER_REGISTER_FINAL" height="16"
+													   label="Nº da Fatura  (Agrupamento)" groupName="ORDER"/>
+										<s:RadioButton id="CORDER_REGISTER" height="16"
+													   label="Registro Nº (Agrupamento)" groupName="ORDER"/>
+										<s:RadioButton id="CORDER_PAY_TYPE" height="16"
+													   label="Forma de Pagamento" groupName="ORDER"/>
+										<s:RadioButton id="CORDER_VALUE_IN" height="16" label="Valor (Receita)"
+													   groupName="ORDER"/>
+										<s:RadioButton id="CORDER_VALUE_OUT" height="16" label="Valor (Despesa)"
+													   groupName="ORDER"/>
+										<s:RadioButton id="CORDER_financial_ACCOUNT" height="16" label="Contas"
+													   groupName="ORDER"/>
+										<s:RadioButton id="CORDER_CLIENT" height="16" label="Cliente"
+													   groupName="ORDER"/>
+									</s:VGroup>
+									
+									<s:Rect height="15"/>
+									
+									<elements:elementLabelFont fontSize="13" fontWeight="normal" text="EM VALOR" paddingBottom="15"/>
+									<s:VGroup width="100%" gap="6">
+										<s:RadioButton id="CORDERASC_ASC" height="16" label="Crescente (Normal)"
+													   groupName="ORDERASC" selected="true"/>
+										<s:RadioButton id="CORDERASC_DESC" height="16" label="Decrescente"
+													   groupName="ORDERASC"/>
+									</s:VGroup>
+									
+									<s:Rect height="15"/>
+									
+									<elements:elementLabelFont fontSize="13" fontWeight="normal" text="MODO SIMPLES" paddingBottom="15"/>
+									<s:ToggleButton id="stageSimple_" width="100%" height="30" label="Modo Simples" selected="false"
+													click="{stageSimple_.selected==true?setCurrentState('easy'):setCurrentState('normal')}" />
+									
+									
+									<!-- s:Rect height="15"/>
+									
+									<elements:elementLabelFont fontSize="13" fontWeight="normal" text="REGISTROS NUMÉRICOS" paddingBottom="15"/>
+									<s:Button width="100%" height="25" label="Verificar sequência"
+									click="{__checkLetter(true)}"
+									toolTip="Verificar a sequência dos registros, se estão na sequência correta."/>
+									-->
+									
+								</s:VGroup>
+							</s:Scroller>
+						</s:NavigatorContent>
+					</mx:ViewStack>
+					
+				</s:NavigatorContent>
+				
+			</mx:Accordion>
+		</s:Group>
+		
+		<elements:elementVLine width="1" />
+		
+		<s:VGroup width="100%" height="100%">
+			
+			<!-- s:HGroup width="100%" padding="10" paddingTop="0" gap="1" verticalAlign="middle">
+			
+			<s:Image source="{gnncEmbedBlackWhite.bw_search_16}" toolTip="Pesquisar Cadastro"/>
+			<elements:elementInputSearch id="SEARCH_" width="170" height="25"  />
+			
+			<s:Rect width="10"/>
+			
+			<s:Image source="{gnncEmbedImage.FILTER_16}" toolTip="Filtrar Cadastros"/>
+			<elements:elementInputSearch id="clientFilter_" width="170" height="25" _FILTER="true" />
+			
+			<s:Rect width="100%"/>
+			<elements:elementLabelFont id="labelRows_" text="{FINANCIAL_.dataProvider.length ? FINANCIAL_.dataProvider.length : '0' }" paddingRight="10" height="25"/>
+			</s:HGroup -->
+			
+			
+			
+			<s:HGroup id="filterGroup_" width="100%" padding="10" gap="1" verticalAlign="middle">
+				
+				<s:Image source="{gnncEmbedImage.FILTER_16}" toolTip="Filtrar Lançamentos"/>
+				<elements:elementInputSearch id="SEARCH_SAFE_" width="200" _FILTER="true"
+											 _FUNCTION_Event_="{function(e:Event):void{__financialFilter(SEARCH_SAFE_._TEXT)}}"/>
+				
+				<s:Rect width="100%"/>
+				
+				<s:HGroup gap="-1" verticalAlign="middle">
+					<elements:elementLabelDropShadow fontSize="11" fontWeight="normal" paddingLeft="5"
+													 paddingRight="10" text="TRABALHAR COM DATA DE "/>
+					<s:ToggleButton id="WDE_" height="30" label="Vencimento"
+									click="{__workDate(event)}" fontSize="11" fontWeight="normal"
+									icon="{gnncEmbedBlackWhite.check_16_green}" selected="true" />
+					<s:ToggleButton id="WDF_" height="30" label="Faturamento" click="{__workDate(event)}"
+									fontSize="11" fontWeight="normal"
+									icon="{gnncEmbedBlackWhite.check_16_green_ok}" selected="false" />
+					<s:ToggleButton id="WEorF_" height="30" label="Venc || Fatur"
+									click="{__workDate(event)}" fontSize="11" fontWeight="normal"
+									selected="false" 
+									toolTip="Ou Vencimento, Ou Faturamento"/>
+					<!--s:ToggleButton id="WEF_" height="30" label="Venc = Baixa"
+					click="{__workDate(event)}" fontSize="11" fontWeight="normal"
+					selected="false"
+					toolTip="Vencimento e Baixa em dias semelhantes"/ -->
+					<s:ToggleButton id="WDD_" height="30" label="Cadastro"
+									click="{__workDate(event)}" fontSize="11" fontWeight="normal"
+									icon="{gnncEmbedBlackWhite.bw_new_16}" selected="false" />
+				</s:HGroup>
+				
+				<s:ToggleButton id="btnOptions_" height="30" label="Opções"
+								click="{
+								actionButtons_.visible = btnOptions_.selected;
+								filterGroup_.paddingTop = actionButtons_.visible == true ? 75 : 10 ;
+								}" 
+								fontSize="11" fontWeight="bold"
+								selected="false"  />
+				
+			</s:HGroup>
+			
+			
+			<s:List id="FINANCIAL_" width="100%" height="100%" allowMultipleSelection="true"
+					borderVisible="false" change="{__multiSelect()}" contentBackgroundAlpha=".5"
+					dataProvider="{new ArrayCollection()}" horizontalScrollPolicy="off" verticalScrollPolicy="on"
+					itemRenderer="GNNC.modules.financial.itemRender.itemRender_financial_forList"
+					rightMouseDown="__financialMenu(event)">
+				<s:layout>
+					<s:VerticalLayout gap="0" padding="10" paddingTop="0" paddingRight="5"/>
+				</s:layout>
+			</s:List>
+			<s:Group width="100%" height="35">
+				<elements:elementBarStatus height="35"/>
+				<s:HGroup left="3" right="3" paddingTop="3" fontWeight="bold" gap="1" verticalAlign="middle">
+					
+					<s:Label width="20" text="Σ" textAlign="center"/>
+					
+					<s:VGroup gap="1" verticalAlign="middle" height="30">
+						<s:Label fontSize="11" text="Faturado" paddingRight="7" paddingLeft="7" toolTip="Faturado (baixado)"/>
+						<s:Label fontSize="11" text="Aberto" paddingRight="7" paddingLeft="7" alpha=".6" toolTip="A pagar/receber ou cancelados"/>
+					</s:VGroup>
+					<s:VGroup gap="1" verticalAlign="middle" height="30">
+						<s:Label id="VI_"      width="70" color="0x009900" fontSize="11" text="" textAlign="right" paddingRight="7" paddingLeft="7"/>
+						<s:Label id="VIopen_"  width="70" color="0x009900" fontSize="11" text="" textAlign="right" paddingRight="7" paddingLeft="7" alpha=".6" toolTip="A pagar/receber"/>
+					</s:VGroup>
+					<s:VGroup gap="1" verticalAlign="middle" height="30">
+						<s:Label id="VO_"      width="70" color="0xcc0000" fontSize="11" text="" textAlign="right" paddingRight="7" paddingLeft="7"/>
+						<s:Label id="VOopen_"  width="70" color="0xcc0000" fontSize="11" text="" textAlign="right" paddingRight="7" paddingLeft="7" alpha=".6" toolTip="A pagar/receber"/>
+					</s:VGroup>
+					<s:VGroup gap="1" verticalAlign="middle" height="30">
+						<s:Label id="VS_"      width="10" fontSize="11" text="" textAlign="center" paddingRight="7" paddingLeft="7"/>
+						<s:Label id="VSopen_"  width="10" fontSize="11" text="" textAlign="center" paddingRight="7" paddingLeft="7" alpha=".6"/>
+					</s:VGroup>
+					<s:VGroup gap="1" verticalAlign="middle" height="30">
+						<s:Label id="VR_"      width="70" fontSize="11" text="" textAlign="right" paddingRight="7" paddingLeft="7"/>
+						<s:Label id="VRopen_"  width="70" fontSize="11" text="" textAlign="right" paddingRight="7" paddingLeft="7" alpha=".6" toolTip="A pagar/receber"/>
+					</s:VGroup>
+					
+					<s:Rect width="10"/>
+					
+					<s:Image source="{gnncEmbedBlackWhite.bw_description_16}" toolTip="Descrição"/>
+					
+					<s:Label id="DS_" width="100%" maxDisplayedLines="1" paddingLeft="7" paddingRight="7" showTruncationTip="true" text=""/>
+					<s:Label id="AD_" width="145" color="0x3366cc" fontSize="11" maxDisplayedLines="1" paddingLeft="7" paddingRight="7" showTruncationTip="true" text=""/>
+					<s:Button label="Gerar Listagem" click="{__reportPdf()}"
+							  icon="{gnncEmbedBlackWhite.bw_document_16_pdf}" height="30"/>
+					<s:Button icon="{gnncEmbedImage.DIRECTION_UP_16}" width="25" height="30" click="{gloListGo(true)}"/>
+					<s:Button icon="{gnncEmbedImage.DIRECTION_DOWN_16}" width="25" height="30" click="{gloListGo(false)}"/>
+					<!-- 
+					label="Ir para o topo da listagem"
+					label="Ir para o fim da listagem"  
+					-->
+				</s:HGroup>
+			</s:Group>
+			
+		</s:VGroup>
+	</s:HGroup>
+	
+	<!--
+	//topLeft,above,below,center,left,right,
+	-->
+	
+	<s:HGroup id="actionButtons_" left="{230+66+2}" right="0" top="0" padding="10" gap="-1" verticalAlign="middle" visible="false"
+			  >
+		
+		<s:Group width="66" height="60">
+			<s:Button id="btnFinal_" width="66" height="60"
+					  click="{__financialDateFinal()}" 
+					  icon="{gnncEmbedBlackWhite.check_32_green_ok}" 
+					  iconPlacement="top"
+					  label="Faturar"
+					  toolTip="Faturar lançamento (Pagar/Receber)"
+					  skinClass="GNNC.skin.button.skin_buttonLink"
+					  />
+			<s:Button id="btnNoFinal_" width="66" height="60"
+					  click="{__financialDateFinalRemove()}" 
+					  icon="{gnncEmbedBlackWhite.app_close_32_clean}" 
+					  iconPlacement="top"
+					  label="Reverter"
+					  toolTip="Descartar faturamento (Pagamento/Recebimento)"
+					  skinClass="GNNC.skin.button.skin_buttonLink"
+					  visible="false"
+					  />
+		</s:Group>
+		
+		<!-- s:Rect width="5"/ -->
+		
+		<s:Button id="btnCancel_" width="66" height="60"
+				  click="{__financialDateCanceled()}"
+				  icon="{gnncEmbedBlackWhite.check_32_bw_ok}" 
+				  iconPlacement="top"
+				  label="Cancelar"
+				  toolTip="Cancelar lançamento. Lançamento inativo porém visível."
+				  skinClass="GNNC.skin.button.skin_buttonLink"
+				  />
+		<s:Button id="btnAlert_" width="66" height="60"
+				  click="{__financialActive(true,0)}"
+				  icon="{gnncEmbedBlackWhite.bw_urgent_32}" 
+				  iconPlacement="top"
+				  label="Pendente" 
+				  toolTip="Marcar lançamento como pendente. Este marcador não altera o resultado financeiro."
+				  skinClass="GNNC.skin.button.skin_buttonLink"
+				  />
+		
+		<!-- s:Rect width="5"/ -->
+		
+		<elements:elementVLine width="5"/>
+		
+		<s:Button width="66" height="60" click="{__newFinancialConnection()}"
+				  enabled="true"
+				  iconPlacement="top"
+				  label="Vincular" 
+				  toolTip="Vincular Lançamento"
+				  icon="{gnncEmbedBlackWhite.bw_financial_32_safe_connection}" 
+				  skinClass="GNNC.skin.button.skin_buttonLink"
+				  />
+		<s:Button width="66" height="60" click="{__newFinancialReversal()}"
+				  enabled="true" 
+				  iconPlacement="top"
+				  label="Estornar" 
+				  toolTip="Estornar Lançamento"
+				  icon="{gnncEmbedBlackWhite.bw_financial_32_safe_reversal}"
+				  skinClass="GNNC.skin.button.skin_buttonLink"
+				  />
+		
+		<!-- s:Rect width="5"/ -->
+		
+		<s:Button id="btnReceipt_" width="66" height="60" click="{__financialReceipt()}"
+				  enabled="true" 
+				  iconPlacement="top"
+				  label="Recibo" 
+				  toolTip="Recibo"
+				  icon="{gnncEmbedImage.RECEIPT_32}"
+				  skinClass="GNNC.skin.button.skin_buttonLink"
+				  />
+		
+		<s:Button id="btnChange_" width="66" height="60" click="{panelChange(true)}"
+				  enabled="true" 
+				  iconPlacement="top"
+				  label="Ação" 
+				  toolTip="Ação"
+				  icon="{gnncEmbedBlackWhite.bw_ok_32}"
+				  skinClass="GNNC.skin.button.skin_buttonLink"
+				  />
+		
+	</s:HGroup>
+	
+	
+	<s:VGroup visible="{FINANCIAL_.dataProvider.length>0?false:true}" gap="1" horizontalCenter="0"
+			  verticalCenter="0" paddingLeft="300">
+		<s:Button id="buttonToday_" height="30" label="Lançamentos de Hoje" click="{__financialToday()}"
+				  fontWeight="normal"/>
+	</s:VGroup>
+	
+	<s:Group id="panelChart" right="0" top="65" bottom="0" width="600" moveEffect="{movie}"
+			 visible="false"
+			 >
+		<s:Rect width="100%" height="100%">
+			<s:fill>
+				<s:SolidColor color="0xf9f9f9"/>
+			</s:fill>
+			<s:stroke>
+				<s:SolidColorStroke color="0xcccccc"/>
+			</s:stroke>
+		</s:Rect>
+		<s:VGroup width="100%" height="100%" padding="20" gap="1">
+			<elements:elementLabelFont fontSize="16" text="PESQUISA EM GRÁFICOS"/>
+			<s:Label text="Agrupar por"/>
+			<s:CheckBox label="Receitas" />
+			<s:CheckBox label="Despesas" />
+			<s:CheckBox label="Faturados (baixados)" />
+			<s:CheckBox label="Tipos de pagamentos" />
+			<s:CheckBox label="Clientes e Cadastros" />
+			<s:CheckBox label="Departamentos" />
+			<s:CheckBox label="Plano de Contas" />
+			<s:CheckBox label="Contas" />
+			<s:CheckBox label="Taxas" />
+		</s:VGroup>
+		
+		<s:Button label="Fechar" click="{panelChart.right=-610}" top="10" right="10" width="10" height="10" />
+		
+	</s:Group>
+	
+	<s:Group id="panelList_" right="-610" top="0" bottom="0" width="600" visible="false">
+		
+		<s:RectangularDropShadow distance="0" width="100%"  height="100%" 
+								 alpha=".5"
+								 blurX="15"
+								 blurY="15" />
+		
+		<s:Rect width="100%" height="100%">
+			<s:fill>
+				<s:SolidColor color="0xf9f9f9"/>
+			</s:fill>
+			<s:stroke>
+				<s:SolidColorStroke color="0xcccccc"/>
+			</s:stroke>
+		</s:Rect>
+		
+		<s:VGroup width="100%" height="100%" paddingTop="12" paddingBottom="20" paddingLeft="20" paddingRight="20" gap="1">
+			
+			<s:Group width="100%" height="100%">
+				
+				<elements:elementLabelFont id="listPanelTitle_" text="Listagem" fontSize="16" 
+										   width="100%" maxDisplayedLines="1" showTruncationTip="true" />
+				
+				<s:List id="listPanel_" width="100%" top="30" bottom="0"
+						itemRenderer="GNNC.modules.financial.itemRender.itemRender_financial_forList"
+						borderVisible="false" horizontalScrollPolicy="off" contentBackgroundAlpha="0" 
+						/>
+				<!-- s:Rect width="100%" top="30" bottom="0">
+				<s:stroke>
+				<s:SolidColorStroke color="0xdddddd"/>
+				</s:stroke>
+				</s:Rect -->
+			</s:Group>
+			
+			<s:HGroup width="100%" gap="1" enabled="{listPanel_.enabled}">
+				<!--s:Button label="Capturar" click="{ listPanel_.dataProvider = FINANCIAL_.dataProvider }" 
+				icon="{gnncEmbedBlackWhite.bw_clipboard_16_paste}"
+				/ -->
+				<s:Button label="Enviar para área principal" height="30"
+						  icon="{gnncEmbedBlackWhite.bw_clipboard_16_copy}"
+						  click="{ 
+						  FINANCIAL_.dataProvider = listPanel_.dataProvider;
+						  _financial.DATA_ARR  = new ArrayCollection(listPanel_.dataProvider.toArray());
+						  _financial.DATA_ROWS = listPanel_.dataProvider.length;
+						  panel(false); 
+						  }"
+						  />
+				<s:Rect width="100%"/>
+				<s:Button label="Visualizar" height="30" icon="{gnncEmbedBlackWhite.bw_view_16}" click="{__financialViewClickPanel()}" />
+				<s:Button label="Fechar" height="30" icon="{gnncEmbedBlackWhite.app_close_16_clean}" click="{panel(false)}"  />
+			</s:HGroup>
+			
+		</s:VGroup>
+		
+		<s:Button label="Fechar" click="{panel(false)}" top="10" right="10" width="10" height="10" />
+		
+	</s:Group>
+	
+	
+	
+	<s:Group id="panelChange_" right="-410" top="0" bottom="0" width="400" visible="false">
+		
+		<s:RectangularDropShadow distance="0" width="100%"  height="100%" 
+								 alpha=".5"
+								 blurX="15"
+								 blurY="15" />
+		
+		<s:Rect width="100%" height="100%">
+			<s:fill>
+				<s:SolidColor color="0xf9f9f9"/>
+			</s:fill>
+			<s:stroke>
+				<s:SolidColorStroke color="0xcccccc"/>
+			</s:stroke>
+		</s:Rect>
+		
+		<s:VGroup width="100%" height="100%" paddingTop="12" paddingBottom="20" paddingLeft="20" paddingRight="20" gap="1">
+			
+			<s:Scroller width="100%" height="100%" verticalScrollPolicy="off">
+				<s:VGroup width="100%" height="100%" gap="5">
+					<elements:elementLabelFont text="MÚLTIPLAS ATUALIZAÇÕES" fontSize="16"/>
+					
+					<s:Rect height="15"/>
+					
+					<!-- 
+					o.ID_DEPARTAMENT;
+					o.ID_GROUP;
+					o.ID_CLIENT = 0; ok
+					o.DOCUMENT_TYPE;
+					o.DOCUMENT_BANK;
+					o.DATE_END;
+					
+					o.FINE_PERCENT = 0;
+					o.FINE_PERCENT_TIME = 0;
+					o.FINE_VALUE = 0;
+					o.FINE_VALUE_PERCENT = 0;
+					o.DISCOUNT_PUNCTUALITY;
+					
+					o.ID_PROJECT;
+					-->
+					
+					<s:CheckBox id="HsetVALUE_" label="Valor" selected="false" fontWeight="bold"/>
+					
+					<elements:elementHLine height="8" alpha=".5" />
+
+					<s:HGroup gap="-1" height="25" verticalAlign="middle" enabled="{HsetVALUE_.selected}" >
+						<s:Group width="25" height="25">
+							<s:Rect width="25" height="25" radiusX="3" radiusY="3">
+								<s:fill>
+									<s:SolidColor color="0xcccccc"/>
+								</s:fill>
+							</s:Rect>
+							<s:Label text="R$" fontWeight="normal" verticalAlign="middle" textAlign="center" width="25" height="25" paddingTop="1"/>
+						</s:Group>
+						<s:TextInput id="setVALUE_" width="80" paddingLeft="5" text="0,00" height="25" restrict="[0-9]" fontSize="12"
+									 contentBackgroundColor="{setVALUE_.text!=='0,00'?0x444444:0xffffff}"
+									 color="{setVALUE_.text!=='0,00'?0xffffff:0x444444}"
+									 keyUp  ="{gnncDataNumber.__safeKeyEvent(event,true)}" 
+									 keyDown="{gnncDataNumber.__safeKeyEvent(event,true)}"
+									 />
+					</s:HGroup>
+					
+					<s:CheckBox id="HsetACCOUNT_" label="Conta" selected="false" fontWeight="bold"/>
+					
+					<s:HGroup gap="1" height="25" width="100%" verticalAlign="middle" enabled="{HsetACCOUNT_.selected}" >
+						<s:DropDownList id="setACCOUNT_" width="100%" height="25" 
+										enabled="{HsetACCOUNT_.selected}"
+										dataProvider="{_gnncGlobal._FINANCIAL_ACCOUNT.DATA_ARR}"
+										itemRenderer="GNNC.modules.financial.itemRender.itemRender_financialAccount_forList"
+										labelField="NAME" prompt="Conta..."/>
+						
+						<s:Button width="25" height="25"
+								  click="{setACCOUNT_.selectedIndex=-1}"
+								  icon="{gnncEmbedBlackWhite.bw_clear_14_selection}"
+								  skinClass="GNNC.skin.button.skin_buttonLink" enabled="false"/>
+					</s:HGroup>
+					
+					<s:CheckBox id="HsetClient_" label="Cliente / Fornecedor" selected="false" fontWeight="bold"/>
+					<select:conSelect_CLIENT id="setCLIENT_" _ADD="false" _ADDQUICK="false" enabled="{HsetClient_.selected}"/>
+					
+					<s:CheckBox id="HsetDAY_END_" label="Dia de Vencimento" selected="false" fontWeight="bold"/>
+					<s:NumericStepper id="setDAY_END_" value="10" minimum="1" maximum="28" width="100" height="25" textAlign="left" enabled="{HsetDAY_END_.selected}" maxChars="2" />
+					
+					<elements:elementHLine height="8" alpha=".5" />
+					
+					<s:CheckBox id="HsetFINE_PERCENT_" label="Juro" selected="false" fontWeight="bold"/>
+					<s:HGroup gap="1" height="25" verticalAlign="middle" enabled="{HsetFINE_PERCENT_.selected}" >
+						<s:HGroup gap="-1" height="25" verticalAlign="middle" >
+							<s:Group width="25" height="25">
+								<s:Rect width="25" height="25" radiusX="3" radiusY="3">
+									<s:fill>
+										<s:SolidColor color="0xcccccc"/>
+									</s:fill>
+								</s:Rect>
+								<s:Label text="%" fontWeight="normal" verticalAlign="middle" textAlign="center" width="25" height="25" paddingTop="1"/>
+							</s:Group>
+							<s:TextInput id="setFINE_PERCENT_" width="80" paddingLeft="5" text="0,000" height="25" restrict="[0-9]" fontSize="12"
+										 contentBackgroundColor="{setFINE_PERCENT_.text!=='0,000'?0x444444:0xffffff}"
+										 color="{setFINE_PERCENT_.text!=='0,000'?0xffffff:0x444444}"
+										 keyUp  ="{gnncDataNumber.__safeKeyEvent(event,true,null,3)}" 
+										 keyDown="{gnncDataNumber.__safeKeyEvent(event,true,null,3)}"
+										 />
+						</s:HGroup>
+						<s:DropDownList id="setFINE_PERCENT_TIME_" width="150" height="25" dataProvider="{gnncGlobalArrays._FINANCIAL_FINE_PERCENT}" selectedIndex="0"/>
+					</s:HGroup>
+					
+					<s:CheckBox id="HsetFINE_VALUE_PERCENT_" label="Multa Percentual" selected="false" fontWeight="bold"/>
+					
+					<s:HGroup gap="-1" height="25" verticalAlign="middle" enabled="{HsetFINE_VALUE_PERCENT_.selected}" >
+						<s:Group width="25" height="25">
+							<s:Rect width="25" height="25" radiusX="3" radiusY="3">
+								<s:fill>
+									<s:SolidColor color="0xcccccc"/>
+								</s:fill>
+							</s:Rect>
+							<s:Label text="%" fontWeight="normal" verticalAlign="middle" textAlign="center" width="25" height="25" paddingTop="1"/>
+						</s:Group>
+						<s:TextInput id="setFINE_VALUE_PERCENT_" width="80" paddingLeft="5" text="0,000" height="25" restrict="[0-9]" fontSize="12"
+									 contentBackgroundColor="{setFINE_VALUE_PERCENT_.text!=='0,000'?0x444444:0xffffff}"
+									 color="{setFINE_VALUE_PERCENT_.text!=='0,000'?0xffffff:0x444444}"
+									 keyUp  ="{gnncDataNumber.__safeKeyEvent(event,true,null,3)}" 
+									 keyDown="{gnncDataNumber.__safeKeyEvent(event,true,null,3)}"
+									 />
+					</s:HGroup>
+					
+					<s:CheckBox id="HsetFINE_VALUE_" label="Multa fixa" selected="false" fontWeight="bold"/>
+					
+					<s:HGroup gap="-1" height="25" verticalAlign="middle" enabled="{HsetFINE_VALUE_.selected}" >
+						<s:Group width="25" height="25">
+							<s:Rect width="25" height="25" radiusX="3" radiusY="3">
+								<s:fill>
+									<s:SolidColor color="0xcccccc"/>
+								</s:fill>
+							</s:Rect>
+							<s:Label text="R$" fontWeight="normal" verticalAlign="middle" textAlign="center" width="25" height="25" paddingTop="1"/>
+						</s:Group>
+						<s:TextInput id="setFINE_VALUE_" width="80" paddingLeft="5" text="0,00" height="25" restrict="[0-9]" fontSize="12"
+									 contentBackgroundColor="{setFINE_VALUE_.text!=='0,00'?0x444444:0xffffff}"
+									 color="{setFINE_VALUE_.text!=='0,00'?0xffffff:0x444444}"
+									 keyUp  ="{gnncDataNumber.__safeKeyEvent(event,true,null,2)}" 
+									 keyDown="{gnncDataNumber.__safeKeyEvent(event,true,null,2)}"
+									 />
+					</s:HGroup>
+					
+					<s:CheckBox id="HsetDISCOUNT_PUNCTUALITY_" label="Desconto de Pontualidade" selected="false" fontWeight="bold"/>
+					
+					<s:HGroup gap="-1" height="25" verticalAlign="middle" enabled="{HsetDISCOUNT_PUNCTUALITY_.selected}" >
+						<s:Group width="25" height="25">
+							<s:Rect width="25" height="25" radiusX="3" radiusY="3">
+								<s:fill>
+									<s:SolidColor color="0xcccccc"/>
+								</s:fill>
+							</s:Rect>
+							<s:Label text="R$" fontWeight="normal" verticalAlign="middle" textAlign="center" width="25" height="25" paddingTop="1"/>
+						</s:Group>
+						<s:TextInput id="setDISCOUNT_PUNCTUALITY_" width="80" paddingLeft="5" text="0,00" height="25" restrict="[0-9]" fontSize="12"
+									 contentBackgroundColor="{setDISCOUNT_PUNCTUALITY_.text!=='0,00'?0x444444:0xffffff}"
+									 color="{setDISCOUNT_PUNCTUALITY_.text!=='0,00'?0xffffff:0x444444}"
+									 keyUp  ="{gnncDataNumber.__safeKeyEvent(event,true,null,2)}" 
+									 keyDown="{gnncDataNumber.__safeKeyEvent(event,true,null,2)}"
+									 />
+					</s:HGroup>
+					
+					<elements:elementHLine height="8" alpha=".5" />
+					
+					<s:CheckBox id="HsetCOURSE_" label="Turma" selected="false" fontWeight="bold" width="100%"/>
+					<s:HGroup gap="-1" height="25" width="100%" verticalAlign="middle" enabled="{HsetCOURSE_.selected}" >
+						<s:Button id="setCOURSE_" width="100%" height="30"
+								  label="Selecionar a turma" click="{__courseSelectedMassive()}"
+								  fontWeight="bold" icon="{gnncEmbedBlackWhite.bw_course_16}"
+								  skinClass="GNNC.skin.button.skin_buttonBlue"/>
+						<!-- s:DropDownList id="courseList_" width="100%" height="25" dataProvider="{new ArrayCollection()}" prompt="Selecione... " labelField="NAME" />
+						<s:Button label="Todas" height="25" icon="{gnncEmbedBlackWhite.bw_all_16}" click="{__course()}"/ -->
+					</s:HGroup>
+					
+					
+				</s:VGroup>
+			</s:Scroller>
+			
+			<s:HGroup width="100%" gap="1" enabled="{panelChange_.enabled}">
+				<s:Button label="Executar Mudanças" height="30" icon="{gnncEmbedBlackWhite.bw_urgent_16}" fontWeight="bold"
+						  click="{__changeMassive()}"
+						  />
+				<s:Rect width="100%"/>
+				<s:Button label="Fechar" height="30" icon="{gnncEmbedBlackWhite.app_close_16_clean}" click="{panelChange(false)}"  />
+			</s:HGroup>
+			
+		</s:VGroup>
+		
+		<s:Button label="Fechar" click="{panelChange(false)}" top="10" right="10" width="10" height="10" />
+		
+	</s:Group>
+	
+	
+	
+	
+	
+</s:Module>

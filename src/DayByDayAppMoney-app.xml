@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!-- application xmlns="http://ns.adobe.com/air/application/3.1" -->
+<application xmlns="http://ns.adobe.com/air/application/28.0">
+	<id>DayByDayAppMoney</id>
+	<filename>DayByDay - AppMoney</filename>
+	<name>DayByDay - AppMoney</name>
+	<versionNumber>5.209</versionNumber>
+	<!-- <versionLabel></versionLabel> -->
+	<!-- <description></description> -->
+	<copyright>GNNC</copyright>
+	<!-- Publisher ID. Used if you're updating an application created prior to 1.5.3 -->
+	<!-- <publisherID></publisherID> -->
+	<initialWindow>
+		<content>[This value will be overwritten by Flash Builder in the output app.xml]</content>
+		<!-- <title></title> -->
+		<systemChrome>none</systemChrome>
+		<!-- <transparent></transparent> -->
+		<!-- <visible></visible> -->
+		<!-- <minimizable></minimizable> -->
+		<!-- <maximizable></maximizable> -->
+		<!-- <resizable></resizable> -->
+		<width>950</width>
+		<height>600</height>
+		<!-- <x></x> -->
+		<!-- <y></y> -->
+		<!-- <minSize></minSize> -->
+		<!-- <maxSize></maxSize> -->
+        <!-- The render mode for the app (either auto, cpu, gpu, or direct). Optional. Default auto -->
+        <!-- <renderMode></renderMode> -->
+		<!-- Whether or not to pan when a soft keyboard is raised or lowered (either "pan" or "none").  Optional.  Defaults "pan." -->
+		<!-- <softKeyboardBehavior></softKeyboardBehavior> -->
+	<autoOrients>false</autoOrients>
+        <fullScreen>false</fullScreen>
+        <visible>false</visible>
+    </initialWindow>
+
+	<!-- We recommend omitting the supportedProfiles element, -->
+	<!-- which in turn permits your application to be deployed to all -->
+	<!-- devices supported by AIR. If you wish to restrict deployment -->
+	<!-- (i.e., to only mobile devices) then add this element and list -->
+	<!-- only the profiles which your application does support. -->
+	<supportedProfiles>extendedDesktop desktop</supportedProfiles>
+	<installFolder>GNNC</installFolder>
+	<programMenuFolder>GNNC</programMenuFolder>
+
+	<!-- The icon the system uses for the application. For at least one resolution,
+	specify the path to a PNG file included in the AIR package. Optional. -->
+	<icon>
+		<image16x16>GNNC/ico/icon16.png</image16x16>
+		<image32x32>GNNC/ico/icon32.png</image32x32>
+		<!-- <image36x36></image36x36> -->
+		<image48x48>GNNC/ico/icon48.png</image48x48>
+		<!-- <image72x72></image72x72> -->
+		<!-- <image114x114></image114x114> -->
+		<image128x128>GNNC/ico/icon128.png</image128x128>
+	</icon>
+
+	<!-- Whether the application handles the update when a user double-clicks an update version
+	of the AIR file (true), or the default AIR application installer handles the update (false).
+	Optional. Default false. -->
+	<!-- <customUpdateUI></customUpdateUI> -->
+	
+	<!-- Whether the application can be launched when the user clicks a link in a web browser.
+	Optional. Default false. -->
+	<!-- <allowBrowserInvocation></allowBrowserInvocation> -->
+
+</application>

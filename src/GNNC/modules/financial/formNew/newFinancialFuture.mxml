@@ -1,0 +1,230 @@
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  
+		  width="750" height="520"
+		  
+		  creationComplete="__start()" 
+		  
+		  xmlns:stage			= "GNNC.elements.stage.*" 
+		  xmlns:component		= "GNNC.elements.component.*" 
+		  xmlns:select			= "GNNC.elements.component.select.*" 
+		  xmlns:gnncDateField4	= "GNNC.UI.gnncDateField4.*" 
+		  xmlns:gnncLoading="GNNC.UI.gnncLoading.*" 
+		  
+		  >
+	<fx:Script>
+		<![CDATA[
+			import GNNC.UI.gnncPopUp.gnncPopUp;
+			import GNNC.data.data.gnncDataNumber;
+			import GNNC.data.date.gnncDate;
+			import GNNC.data.globals.gnncGlobalStatic;
+			import GNNC.data.sql.gnncSql;
+			import GNNC.data.conn.gnncAMFPhp;
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.gnncEmbedImage;
+			import GNNC.keyboard.gnncKeyboard;
+			import GNNC.sqlTables.table_financial_future;
+			
+			import mx.collections.ArrayCollection;
+			
+			[Bindable] private var _gnncGlobal:gnncGlobalStatic 				= new gnncGlobalStatic(true);
+			[Bindable] public var _tableFinancialFuture:table_financial_future 	= new table_financial_future();
+			
+			private var _connFinancial:gnncAMFPhp	= new gnncAMFPhp();
+			private var _connExec:gnncAMFPhp		= new gnncAMFPhp();
+			private var _gnncPopUp:gnncPopUp 		= new gnncPopUp();
+			
+			public var _MIX:String 					= "FINANCIAL_FUTURE";
+			public var _change:Boolean 				= false;
+
+			
+			private function __start():void
+			{
+				__financialFutureList();
+				
+				this.addEventListener(KeyboardEvent.KEY_UP,
+					function(event:KeyboardEvent):void
+					{
+						//if(gnncKeyboard.__CONTROL(event)) BTN_FINAL_.setFocus();
+						if(gnncKeyboard.__ENTER(event))
+						{
+							focusManager.getNextFocusManagerComponent().setFocus();
+							focusManager.getNextFocusManagerComponent().drawFocus(true);
+							
+							focusManager.showFocus();
+							focusManager.getFocus();
+							focusManager.activate();
+						}
+						if(gnncKeyboard.__CONTROL_ENTER(event)) __save();
+						if(gnncKeyboard.__F8(event) || gnncKeyboard.__F9(event))
+						{
+							focusManager.showFocus();
+							focusManager.getFocus();
+							focusManager.activate();
+							titlePopUp_.setFocus();
+						}
+					}
+				);
+
+				callLater(__firstInput);
+				__days();
+			}
+			
+			public function __firstInput():void 
+			{ 
+				VALUE_.setFocus();
+			}
+			
+			private function __days():void
+			{
+				var _i:uint 		= 1;
+				var _arr:Array 		= new Array();
+				
+				for(_i=1; _i<=31; _i++)
+				{
+					_arr.push(_i);
+				}
+				
+				DAY_.dataProvider 	= new ArrayCollection(_arr);
+				DAY_.selectedIndex	= 0;
+			}
+
+			private function __financialFutureList():void
+			{
+				var _table:table_financial_future 	= new table_financial_future();
+				_table.DATE_END						= '%';
+
+				var _columns:Array = 
+					[
+						"*",
+						"(select NAME 		from dbd_client 			where dbd_client.ID like ID_CLIENT													) as NAME_CLIENT",
+						"(select NAME 		from dbd_group 				where dbd_group.ID like ID_GROUP													) as NAME_GROUP",
+						"(select NAME 		from dbd_departament 		where dbd_departament.ID like ID_DEPARTAMENT										) as NAME_DEPARTAMENT",
+						"(select NAME 		from dbd_financial_account 	where dbd_financial_account.ID like ID_FINANCIAL_ACCOUNT							) as NAME_FINANCIAL_ACCOUNT"
+					];
+
+				var _sql:String = new gnncSql().__SELECT(_table,false,_columns);
+				
+				_connFinancial.__sql(_sql);
+			}
+
+			private function __close():void
+			{
+				new gnncPopUp().__close(this);
+			}
+
+			private function __save():void
+			{
+				var _table:table_financial_future 		= new table_financial_future();
+				_table.ID_CLIENT						= CLIENT_.value;
+				_table.ID_FINANCIAL_ACCOUNT				= FINANCIAL_ACCOUNT_.selectedIndex>-1 ? FINANCIAL_ACCOUNT_.selectedItem.ID : 0; 
+
+				_table.VALUE_OUT						= Number(VALUE_.text);
+				_table.MIX								= 'FINANCIAL';
+
+				_table.DATE_END							= '0000-00-'+gnncDataNumber.__setZero(DAY_.selectedItem);
+				
+				_table.ID_DEPARTAMENT					= DEPARTAMENT_.value;
+				_table.ID_GROUP							= GROUP_.value;
+				_table.ID_CATEGORY						= CATEGORY_.value;
+
+				var _sql:String 						= new gnncSql().__INSERT(_table);
+				
+				_connFinancial.__sql					(_sql);
+			}
+
+		]]>
+	</fx:Script>
+	
+	<elements:elementStageBoxPopUp/>
+	
+	<elements:elementLabelFont id="titlePopUp_" text="PREVISÃO DE CUSTOS" fontSize="9" fontWeight="normal" left="1" top="6" right="1" textAlign="center" color="0x555555"/>
+	
+	<s:HGroup left="20" right="20" top="20" height="30" verticalAlign="middle" paddingRight="5">
+		<s:TabBar dataProvider="{panelCenter_}" height="30" focusEnabled="false" />
+	</s:HGroup>
+	
+	<mx:ViewStack id="panelCenter_" left="20" right="20" top="55" bottom="52">
+		<s:NavigatorContent label="DESPESAS" width="100%" height="100%" creationPolicy="all" >
+			<s:List id="financialFutureOut_" width="100%" height="100%" 
+					itemRenderer="GNNC.modules.financial.itemRender.itemRender_financial_forList" contentBackgroundAlpha=".5" >
+				<s:layout>
+					<s:VerticalLayout rowHeight="25" gap="0"/>
+				</s:layout>
+			</s:List>
+		</s:NavigatorContent>
+		<s:NavigatorContent label="RECEITAS" width="100%" height="100%" creationPolicy="all">
+			<s:List id="financialFutureIn_"  width="100%" height="100%" 
+					itemRenderer="GNNC.modules.financial.itemRender.itemRender_financial_forList" contentBackgroundAlpha=".5" >
+				<s:layout>
+					<s:VerticalLayout rowHeight="25" gap="0"/>
+				</s:layout>
+			</s:List>
+		</s:NavigatorContent>
+		<s:NavigatorContent label="CADASTRO" width="100%" height="100%" creationPolicy="all" >
+			<s:layout>
+				<s:HorizontalLayout gap="8" paddingTop="10" paddingLeft="35"/>
+			</s:layout>
+			
+			<s:VGroup width="200" height="100%" gap="5" paddingLeft="5">
+
+				<s:Label text="Vencimento (dia)" fontSize="11" fontWeight="bold" paddingTop="10"/>
+				<s:TextInput id="VALUE_" width="100" height="30" restrict="[0-9]" borderColor="0xcc0000" fontSize="13" contentBackgroundAlpha=".5" />
+
+				<elements:elementHLine height="10"/>
+
+				<s:Label text="{''+gnncDataNumber.__safeReal(Number(VALUE_.text))}" fontSize="11" fontWeight="bold" maxDisplayedLines="1" showTruncationTip="true" color="0xcc0000"/>
+				<s:DropDownList id="DAY_" width="100" height="30" selectedIndex="0"/>
+				
+			</s:VGroup>
+
+			<elements:elementVLine/>
+
+			<s:VGroup width="200" height="100%" gap="5" paddingLeft="5">
+				
+				<s:Label text="Conta" fontSize="11" fontWeight="bold" paddingTop="10"/>
+				<s:DropDownList id="FINANCIAL_ACCOUNT_" dataProvider="{_gnncGlobal._FINANCIAL_ACCOUNT.DATA_ARR}" prompt="Selecione..." width="100%" height="25" labelField="NAME"/>
+				
+				<elements:elementHLine height="10"/>
+				
+				<s:Label text="Classificação" fontSize="11" fontWeight="bold"/>
+				<select:conSelect_DEPARTAMENT 	id="DEPARTAMENT_" 	width="100%" _ADD="false" _MIX="DEPARTAMENT" 	prompt="Departamento..." />
+				<select:conSelect_GROUP 		id="GROUP_" 		width="100%" _ADD="false" _MIX="FINANCIAL_OUT" prompt="Plano de Contas..." />
+				<select:conSelect_CATEGORY 		id="CATEGORY_" 		width="100%" _ADD="false" _MIX="FINANCIAL" prompt="Categoria..." />
+				
+				<elements:elementHLine height="10"/>
+				
+				<s:Label text="Cliente (pagar)" fontSize="11" fontWeight="bold"/>
+				<select:conSelect_CLIENT 		id="CLIENT_" 		width="100%" _ADD="false" />
+				
+			</s:VGroup>
+			
+			<elements:elementVLine/>
+			
+			<s:Group width="200" height="100%" >
+
+				<s:Button id="BTN_SAVE_" icon="{gnncEmbedImage.ADD_32}" label="Cadastrar" click="{__save()}" fontWeight="bold" height="48" width="48" iconPlacement="top" >
+					<s:keyUp>
+						<![CDATA[
+						if( gnncKeyboard.__ENTER(event) && !gnncKeyboard.__CONTROL_ENTER(event) ) 
+						__save()
+						]]>
+					</s:keyUp>
+				</s:Button>
+
+			</s:Group>
+
+		</s:NavigatorContent>
+	</mx:ViewStack>
+	
+	<s:HGroup left="1" right="1" bottom="1" height="34" gap="2" paddingLeft="5" paddingRight="5" verticalAlign="middle">
+		<s:Button label="Atualizar" click="{__financialFutureList()}" icon="{gnncEmbedBlackWhite.bw_refresh_16}" height="25"/>
+		<s:ToggleButton label="Panel de Cadastro" height="25" width="200" fontWeight="bold" /> 
+		<s:Rect width="100%" />
+		<s:Button icon="{gnncEmbedBlackWhite.app_close_16_clean}" label="Fechar" click="{__close()}" height="25" />	
+	</s:HGroup>
+
+	<s:Button top="4" right="4" click="{__close()}" width="10" height="10" tabFocusEnabled="false" toolTip="Fechar" />
+
+</s:Module>

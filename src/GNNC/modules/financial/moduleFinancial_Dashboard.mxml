@@ -1,0 +1,1751 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009"
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:mx="library://ns.adobe.com/flex/mx"
+		  width="100%" height="100%" 
+		  
+		  creationComplete="{__start()}" 
+		  
+		  xmlns:group="GNNC.modules.financial.group.*" 
+		  xmlns:elements="GNNC.UI.elements.*"
+		  >
+	<!--- 
+	
+	JUROS SIMPLES E COMPOSTO
+	http://www.youtube.com/watch?v=YTBZS7VGxiY&feature=related
+	CÁLCULOS PRÁTICOS
+	http://www.calcule.net/juros.financiamento.calculadora/juros_financiamento.php
+	
+	var numero1:Number = 2;
+	var numero2:Number = 2
+	var res:Number = Math.pow(numero1, numero2);
+	
+	Alert.show("O número " + numero1 +
+	" elevado à potência de " + numero2 +
+	" resulta em " + res);
+	
+	-->
+	<fx:Script>
+		<![CDATA[
+			import GNNC.UI.gnncAlert.gnncAlert;
+			import GNNC.UI.gnncDateField4.utils.DateUtil;
+			import GNNC.UI.gnncPopUp.gnncPopUp;
+			import GNNC.data.conn.gnncAMFPhp;
+			import GNNC.data.data.gnncData;
+			import GNNC.data.data.gnncDataBindable;
+			import GNNC.data.data.gnncDataNumber;
+			import GNNC.data.date.DateUtils;
+			import GNNC.data.date.gnncDate;
+			import GNNC.data.element.gnncElement;
+			import GNNC.data.globals.gnncGlobalArrays;
+			import GNNC.data.globals.gnncGlobalLog;
+			import GNNC.data.globals.gnncGlobalStatic;
+			import GNNC.data.permission.gnncPermission;
+			import GNNC.data.permission.gnncPermissionSet;
+			import GNNC.data.sql.gnncSql;
+			import GNNC.event.gnncCloseEvent;
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.gnncEmbedImage;
+			import GNNC.gnncEmbedLogo;
+			import GNNC.keyboard.gnncKeyboard;
+			import GNNC.modules.financial.formNew.newFinancialAccount;
+			import GNNC.modules.financial.itemRender.myLegendItem;
+			import GNNC.sqlTables.table_financial;
+			import GNNC.sqlTables.table_financial_account;
+			
+			import flex.html.Strike;
+			
+			import mx.charts.HitData;
+			import mx.charts.chartClasses.IAxis;
+			import mx.charts.series.LineSeries;
+			import mx.charts.series.items.LineSeriesItem;
+			import mx.collections.ArrayCollection;
+			import mx.events.CloseEvent;
+			import mx.graphics.SolidColor;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable] private var _gnncGlobal:gnncGlobalStatic 	= new gnncGlobalStatic(true);
+			
+			private var _balanceOfYear:gnncAMFPhp = new gnncAMFPhp();
+			private var _safeXfinal:gnncAMFPhp = new gnncAMFPhp();
+			private var _safeList:gnncAMFPhp   = new gnncAMFPhp();
+			private var _safeMonth:gnncAMFPhp  = new gnncAMFPhp();
+			private var _exec:gnncAMFPhp       = new gnncAMFPhp();
+			private var _connFinancialGroupOut:gnncAMFPhp = new gnncAMFPhp();
+			
+			private var _gnncPopUp:gnncPopUp = new gnncPopUp();
+			
+			private var _today:Date = new Date();
+			private var _month:uint = new Date().month; 	//JAN --> 0
+			private var _year:uint 	= new Date().fullYear; 	//2012
+			
+			//private var _gnncTime:gnncTime = new gnncTime();
+			
+			private const heightBar:uint = 40;
+			private const heightBarSmall:uint = 5;
+			
+			private function __start():void
+			{				
+				//MONTH_.text = gnncGlobalArrays._MONTH.getItemAt(new Date().month).label.toString().toUpperCase();
+				
+				this.addEventListener(KeyboardEvent.KEY_UP,
+					function(event:KeyboardEvent):void{
+						if (gnncKeyboard.__F5(event)) __refreshAll();
+					}
+				);
+				
+				financialPieOut_.dataProvider = new ArrayCollection([
+					{label:'Despesa 1...',value:0.01},
+					{label:'Despesa 2...',value:0.02},
+					{label:'3...',value:0.03},
+					{label:'4...',value:0.04},
+					{label:'5...',value:0.02},
+					{label:'6...',value:0.01}
+				]);
+				
+				financialPieOutLegend_.dataProvider = financialPieOut_;
+				
+				ACCOUNT_.addEventListener(IndexChangeEvent.CARET_CHANGE,__financialSelectedAccount);
+				//new gnncDataBindable().__monitoring(_gnncGlobal,'_session',function(e:*):void{()});
+				gnncDataBindable.__loginSession(__permission);
+				gnncDataBindable.__loginSession(__refreshAll);
+			}
+			
+			private function __permission(e:*=null):void
+			{
+				gnncPermission.__blockModule(this,'module-account');
+			}
+			
+			private function __MONTH(month_:uint,refresh_:Boolean=false,year_:uint=0):void
+			{
+				_today = new Date();
+				_month = month_;
+				
+				//MONTH_.label 	= String(ARR._MONTH.getItemAt(_month).label).toUpperCase() + '  ' + year_; //NICK_NAME=OUT
+				//MONTH_.toolTip	= 'Mês de ' + ARR._MONTH.getItemAt(_month).label + ' ' + year_;
+				
+				//MONTH_.text = gnncGlobalArrays._MONTH.getItemAt(month_).label.toString().toUpperCase();
+				
+				if(gnncGlobalStatic._userId && refresh_){
+					__refreshAll(false);
+				}
+			}
+			
+			private function __monthPrev():void
+			{
+				if(_month > 0){
+					_month--;
+				}else{
+					_month = 11;
+					_year--;
+				}
+				__MONTH(_month,true,_year);
+			}
+			
+			private function __monthNext():void
+			{
+				if(_month < 11){
+					_month++;
+				}else{
+					_month = 0;
+					_year++;
+				}
+				__MONTH(_month,true,_year);
+			}
+			
+			private function __refreshAll(callAccount_:Boolean=true):void
+			{
+				_today = new Date();
+				if(callAccount_)
+					__financialAccountList(__callLeft); 
+				else
+					__callLeft();
+				
+				function __callLeft(e:*=null):void
+				{
+					if(gnncPermission.__access('module-account','m'))
+					{
+						//__financialList();
+						callLater(__financialList,[CALENDAR_.selectedDate]);
+						callLater(__RESULT_MONTH);
+						callLater(__REPORT_GROUP);
+						callLater(__safeMonth);
+						callLater(__financialChartBanlance,[-6]);
+					}
+				}
+			}
+			
+			/*private function __FINANCIAL_NEW(safe_in_:Boolean):void
+			{
+			var F:Function = function(e:FlexEvent):void{ if(_PAGE._CHANGE){ __FINANCIAL_LIST(); __FINANCIAL_ACCOUNT_LIST()} };
+			var _PAGE:NEW_FINANCIAL = new NEW_FINANCIAL();
+			safe_in_ ? _PAGE._SAFE_IN = true : _PAGE._SAFE_OUT = true;
+			newnew gnncPopUp().__creation(_PAGE,true,false,F);
+			}*/
+			
+			/**
+			 ################################################
+			 START
+			 ################################################
+			 FINANCIAL ACCOUNT
+			 ################################################
+			 **/
+			
+			private function __financialSelectedAccount(e:*=null):void
+			{
+				if( ACCOUNT_.selectedIndex < 0 ){
+					//gnncGlobalStatic._idFinancialAccountSelected   = 0;
+					//gnncGlobalStatic._nameFinancialAccountSelected = '';
+					return;
+				}				
+				//gnncGlobalStatic._idFinancialAccountSelected   = ACCOUNT_.selectedItem.ID;
+				//gnncGlobalStatic._nameFinancialAccountSelected = gnncData.__firstLetterUpperCase(ACCOUNT_.selectedItem.NAME);
+			}
+			
+			private function __financialAccountNew():void
+			{
+				var p:newFinancialAccount = new newFinancialAccount();
+				new gnncPopUp().__creation(p,true,false,__fResult);
+				function __fResult(e:*):void{
+					if(p._change)
+						__financialAccountList();
+				}
+				
+			}
+			
+			private function __financialAccountEdit():void
+			{
+				if(ACCOUNT_.selectedIndex < 0){
+					new gnncAlert().__alert('Selecione uma conta');
+					return;
+				}
+				
+				var p:newFinancialAccount = new newFinancialAccount();
+				p._tableFinancialAccount = new table_financial_account(ACCOUNT_.selectedItem.ID);
+				new gnncPopUp().__creation(p,true,false,__fResult);
+				
+				function __fResult(e:*):void
+				{
+					if(p._change) __financialAccountList();
+				}
+			}
+			
+			private function __financialAccountDelete():void
+			{
+				var OBJ:Object	= ACCOUNT_.selectedItem;
+				var IDXDATP:int = ACCOUNT_.selectedIndex;
+				var IDXARRA:int = _gnncGlobal._FINANCIAL_ACCOUNT.DATA_ARR.getItemIndex(OBJ);
+				
+				if(IDXDATP < 0){
+					new gnncAlert().__alert('Selecione uma conta');
+					return;
+				}
+				
+				if(gnncDataNumber.__safeClear(OBJ.VALUE_ACCOUNT).toFixed(2)!='0.00'){
+					new gnncAlert().__alert("A conta <b>"+String(OBJ.NAME).toLowerCase()+"</b> com o saldo de "+gnncDataNumber.__safeReal(OBJ.VALUE_ACCOUNT)+
+						" não pode ser excluído pois o <b>saldo precisa ser zerado (R$ 0,00)</b>. Sugerimos que utilize uma transferência entre contas.");
+					return;
+				}
+				
+				gnncAlert.__delete("Todo o histórico será desvinculado desta conta. " +
+					"Você deseja excluir esta <b>conta definitivamente</b>?",'Excluir definitivamente',
+					function(event:gnncCloseEvent):void
+					{
+						if(event.detail != gnncAlert.YES)
+							return;
+						
+						_gnncPopUp.__loading('Excluindo...');
+						var _SQL:String = new gnncSql().__DELETE(new table_financial_account(),[OBJ.ID],true);
+						_exec.__sql(_SQL,'Dados deletados.','',__fResult,__fFault);
+						
+						function __fResult(event:*):void{ 
+							ACCOUNT_.dataProvider.removeItemAt(IDXARRA);
+							_gnncGlobal._FINANCIAL_ACCOUNT.DATA_ARR = new ArrayCollection(ACCOUNT_.dataProvider.toArray());
+							_gnncPopUp.__close();
+						}
+						function __fFault(event:*):void{ 
+							_gnncPopUp.__close();
+						}
+						
+					},[gnncAlert.YES,gnncAlert.CANCEL]);
+			}
+			
+			private function __financialAccountAccess():void
+			{
+				new gnncAlert().__alert('Você não tem permissão.');
+				
+				var id:uint = 0;
+				var sql:String = '' +
+					
+					gnncGlobalStatic._breakSql + 
+					
+					" LOCK TABLES dbd_financial_account WRITE, dbd_financial_account a WRITE, dbd_financial_account b READ " + 
+					gnncGlobalStatic._breakSql + 
+					" LOCK TABLES dbd_financial WRITE, dbd_financial a WRITE, dbd_financial b READ " + 
+					gnncGlobalStatic._breakSql + 
+					
+					" UPDATE dbd_financial_account a " +
+					
+					" JOIN (SELECT round(SUM(b.SAFE_VALUE)+SUM(),2) FROM dbd_financial_account b where b.ID = '"+id+"' limit 1) b " +
+					" JOIN (SELECT round(SUM(b.SAFE_VALUE)+SUM(),2) FROM dbd_financial_account b where b.ID = '"+id+"' limit 1) b " +
+					" JOIN (SELECT round(SUM(b.SAFE_VALUE)+SUM(),2) FROM dbd_financial_account b where b.ID = '"+id+"' limit 1) b " +
+					" JOIN (SELECT round(SUM(b.SAFE_VALUE)+SUM(),2) FROM dbd_financial_account b where b.ID = '"+id+"' limit 1) b " +
+					" JOIN (SELECT round(SUM(b.SAFE_VALUE)+SUM(),2) FROM dbd_financial_account b where b.ID = '"+id+"' limit 1) b " +
+					
+					
+					
+					//VALUE_ACCOUNT_UPDATE
+					//VALUE_ACCOUNT
+					
+					//VALUE_IN
+					//VALUE_OUT
+					
+					//VALUE_IN_PAY
+					//VALUE_OUT_PAY
+					
+					//VALUE_IN_PAY_MONTH
+					//VALUE_OUT_PAY_MONTH
+					
+					
+					
+					" JOIN (coalesce((select round(SUM(b.VALUE_IN_PAY)-SUM(b.VALUE_OUT_PAY),2) from dbd_financial b where b.ID_FINANCIAL_ACCOUNT = '"+id+"' ),0)) as VALUE_ACCOUNT " + 
+					
+					" JOIN (coalesce((select round(SUM(b.VALUE_IN_PAY ),2) from dbd_financial b where LEFT(b.DATE_END,7) like LEFT(NOW(),7) AND b.ID_FINANCIAL_ACCOUNT = '"+id+"' ),0)) as VALUE_IN_ACCOUNT " +
+					" JOIN (coalesce((select round(SUM(b.VALUE_OUT_PAY),2) from dbd_financial b where LEFT(b.DATE_END,7) like LEFT(NOW(),7) AND b.ID_FINANCIAL_ACCOUNT = '"+id+"' ),0)) as VALUE_OUT_ACCOUNT " +
+					
+					" JOIN (coalesce((select round(SUM(b.VALUE_IN),2)      from dbd_financial b where b.DATE_CANCELED < 1 AND b.DATE_FINAL < 1 AND b.VALUE_IN_PAY = 0 AND b.VALUE_OUT_PAY = 0 AND LEFT(b.DATE_END,7) like LEFT(NOW(),7) AND b.ID_FINANCIAL_ACCOUNT = '"+id+"' ),0)) as VALUE_IN_ACCOUNT_MONTH " + 
+					" JOIN (coalesce((select round(SUM(b.VALUE_OUT),2)     from dbd_financial b where b.DATE_CANCELED < 1 AND b.DATE_FINAL < 1 AND b.VALUE_IN_PAY = 0 AND b.VALUE_OUT_PAY = 0 AND LEFT(b.DATE_END,7) like LEFT(NOW(),7) AND b.ID_FINANCIAL_ACCOUNT = '"+id+"' ),0)) as VALUE_OUT_ACCOUNT_MONTH " + 
+					
+					
+					" SET a.SAFE_VALUE = b.NUMBER_NEW  where b.ID = '"+id+"' " + 
+					
+					gnncGlobalStatic._breakSql + 
+					
+					" UNLOCK TABLES ";				
+				
+			}
+			
+			private function __financialAccountList(callback_:Function=null):void
+			{
+				_gnncGlobal._FINANCIAL_ACCOUNT.__clear();
+				var _COLUMNS:Array = new Array
+					([
+						'ID',
+						'NAME',
+						'BANK',
+						'ACCOUNT_TYPE',
+						'COLOR',
+						'ALLOW_NEGATIVE', //permitir saldos negativos
+						
+						"coalesce((select round(SUM(VALUE_IN_PAY),2)  from dbd_financial  					where LEFT(DATE_END,7) like LEFT(NOW(),7) AND ID_FINANCIAL_ACCOUNT = dbd_financial_account.ID ),0) as VALUE_IN",
+						"coalesce((select round(SUM(VALUE_OUT_PAY),2) from dbd_financial 					where LEFT(DATE_END,7) like LEFT(NOW(),7) AND ID_FINANCIAL_ACCOUNT = dbd_financial_account.ID ),0) as VALUE_OUT",
+						"coalesce((select round(SUM(VALUE_IN_PAY)-SUM(VALUE_OUT_PAY),2) from dbd_financial 	where ID_FINANCIAL_ACCOUNT = dbd_financial_account.ID ),0) as VALUE_ACCOUNT",
+						"coalesce((select round(SUM(VALUE_IN_PAY)-SUM(VALUE_OUT_PAY),2) from dbd_financial   ),0) as VALUE_TOTAL",
+						
+						"(select "+
+						"(CASE round(coalesce(SUM(x.VALUE_IN_PAY)-SUM(x.VALUE_OUT_PAY),0),2) "+
+						"WHEN NULL   THEN '0' "+
+						"WHEN ''     THEN '0' "+
+						"WHEN 0      THEN '0' "+
+						"WHEN -0     THEN '0' "+
+						"WHEN '0.00' THEN '0' "+
+						"ELSE '1' "+
+						"END) from dbd_financial x where x.ID_FINANCIAL_ACCOUNT = dbd_financial_account.ID) as UP ",
+						
+						"coalesce((select SUM(VALUE_IN)  FROM dbd_financial as a 					where a.DATE_CANCELED < 1 AND a.DATE_FINAL < 1 AND a.VALUE_IN_PAY = 0 AND a.VALUE_OUT_PAY = 0 AND LEFT(a.DATE_END,7) like LEFT(NOW(),7) AND a.ID_FINANCIAL_ACCOUNT = dbd_financial_account.ID),0) as VALUE_IN_ACCOUNT_MONTH ",
+						"coalesce((select SUM(VALUE_OUT) FROM dbd_financial as a					where a.DATE_CANCELED < 1 AND a.DATE_FINAL < 1 AND a.VALUE_IN_PAY = 0 AND a.VALUE_OUT_PAY = 0 AND LEFT(a.DATE_END,7) like LEFT(NOW(),7) AND a.ID_FINANCIAL_ACCOUNT = dbd_financial_account.ID),0) as VALUE_OUT_ACCOUNT_MONTH "
+					]);
+				
+				var _whereAnd:Array = gnncPermissionSet.__getArray('FINANCIAL_ACCOUNT');
+				
+				//gnncGlobalLog.__add(gnncPermissionSet.__get('FINANCIAL_ACCOUNT','ID'),'permissionSet');
+				finacialAccountGroup_.enabled = false;
+				
+				var _SQL:String = new gnncSql().__SELECT(new table_financial_account(),false,_COLUMNS,null,null,_whereAnd,null,['UP desc','NAME asc','ID'],false);
+				_gnncGlobal._FINANCIAL_ACCOUNT.__sql(_SQL,'','',__fResulAccount,__fFaultAccount);
+				
+				function __fResulAccount(e:*):void
+				{
+					finacialAccountGroup_.enabled = true;
+					
+					if(!_gnncGlobal._FINANCIAL_ACCOUNT.DATA_ROWS)
+						return;
+					
+					var obj:Object;
+					var actual_sum_in:Number 	= 0;
+					var actual_sum_out:Number 	= 0;
+					var actual_sum_ttl:Number 	= 0;
+					var actual_val_acc:Number   = 0;
+					
+					for(var i:uint=0; i<_gnncGlobal._FINANCIAL_ACCOUNT.DATA_ROWS; i++)
+					{
+						obj             = new Object();
+						obj             = _gnncGlobal._FINANCIAL_ACCOUNT.DATA_ARR.getItemAt(i);
+						actual_sum_in 	= Number(actual_sum_in ) + Number(obj.VALUE_IN);
+						actual_sum_out 	= Number(actual_sum_out) + Number(obj.VALUE_OUT);
+						actual_val_acc 	= Number(actual_val_acc) + Number(obj.VALUE_ACCOUNT);						
+					}
+					actual_sum_ttl 		= Number(obj.VALUE_TOTAL);
+					
+					
+					if(!gnncPermission.__access('account-safes-view','a'))
+						valueTotalGeneralAccounts_.text = 'Bloqueado';
+					else
+						valueTotalVisibleAccounts_.text = gnncDataNumber.__safeReal(actual_val_acc);
+					
+					if(!gnncPermission.__access('account-safes-view-general','a'))
+						valueTotalGeneralAccounts_.text = 'Bloqueado';
+					else
+						valueTotalGeneralAccounts_.text = gnncDataNumber.__safeReal(actual_sum_ttl);
+					
+					if(callback_!==null)
+						callback_.call();						
+				}
+				
+				function __fFaultAccount(e:*):void
+				{
+					finacialAccountGroup_.enabled = true;
+					__refreshAll.call();
+				}
+			}
+			
+			/**
+			 ################################################
+			 END
+			 ################################################
+			 FINANCIAL ACCOUNT
+			 ################################################
+			 **/
+			
+			/**
+			 ################################################
+			 START
+			 ################################################
+			 FINANCIAL ACCOUNT
+			 ################################################
+			 **/
+			
+			private function __financialList(dateFrom__:Date=null):void
+			{
+				var WHERE_AND:Array = new Array();
+				var WHERE_OR:Array = new Array();
+				var dateFrom_:Date = (!dateFrom__)?_today:dateFrom__;
+				
+				WHERE_OR.push(" (LEFT(DATE_END,10)   like LEFT('"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+dateFrom_.date+" ',10) AND DATE_CANCELED < 1 ) ");
+				WHERE_OR.push(" (LEFT(DATE_START,10) like LEFT('"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+dateFrom_.date+" ',10) AND DATE_CANCELED < 1 ) ");
+				//WHERE_OR.push(" (DATE_END <= '"+dateFrom_.fullYear+"-"+(dateFrom_.month+1)+"-"+dateFrom_.date+" 23:59:59' AND DATE_START <= '"+dateFrom_.fullYear+"-"+(dateFrom_.month+1)+"-"+(dateFrom_.date)+" 23:59:59' AND DATE_CANCELED < 1 AND MIX <> 'FINANCIAL_NOTE') ");
+				//DATE_FINAL like '0000-00-00 00:00:00' AND 
+				
+				_safeList.__clear();
+				var COLUMNS:Array = 
+					[
+						"*,(select NAME from dbd_client 			where dbd_client.ID = ID_CLIENT						) as NAME_CLIENT",
+						"(select NAME from dbd_group 				where dbd_group.ID = ID_GROUP						) as NAME_GROUP",
+						"(select NAME from dbd_departament 			where dbd_departament.ID = ID_DEPARTAMENT			) as NAME_DEPARTAMENT",
+						"(select NAME from dbd_financial_account 	where dbd_financial_account.ID = ID_FINANCIAL_ACCOUNT) as NAME_FINANCIAL_ACCOUNT"
+					];
+				var _SQL:String = new gnncSql().__SELECT(new table_financial(),false,COLUMNS,null,null,null,WHERE_OR,['DATE_END desc','DATE_START desc','ID'],false,['0','20']);
+				//new DAYBYDAY_ALERT(parentApplication)._ERROR(':'+_SQL);
+				
+				groupList_.enabled = false;
+				_safeList.__sql(_SQL,'','',fResult,fFault);
+				
+				function fResult(e:ResultEvent):void{
+					groupList_.enabled = true;
+					safeFinancialList_.dataProvider = _safeList.DATA_ARR;
+				};
+				function fFault(e:FaultEvent):void{
+					groupList_.enabled = true;
+					safeFinancialList_.dataProvider = new ArrayCollection();
+				};
+				
+			}
+			
+			private function __RESULT_MONTH():void
+			{
+				if(!gnncPermission.__access('account-safe-payments','a'))
+					return;
+				
+				var dt:String  = _year+'-'+gnncDataNumber.__setZero(_month+1)+'-00';
+				var sql:String = "" + 
+					
+					" SELECT " +
+					//" (select COUNT(x.ID) from dbd_financial x where  LEFT(x.DATE_END,7) like LEFT('"+dt+"',7) AND x.DATE_CANCELED < 1 AND MIX <> 'FINANCIAL_TRANS'  AND ((x.VALUE_IN > 0 AND x.VALUE_OUT > 0) OR (x.VALUE_IN_PAY > 0 AND x.VALUE_OUT_PAY > 0)) ) as ROWS_ERROR, " +
+					
+					/* *********************************************************************************** */
+					/* value IN */
+					/* *********************************************************************************** */
+					
+					" (select round(coalesce(SUM(x2.VALUE_IN),0),2) from dbd_financial x2 where "+
+					" 	x2.MIX <> 'FINANCIAL_TRANS'  "+
+					"	AND x2.VALUE_IN > 0 "+
+					//"	AND x2.VALUE_IN_PAY = 0  "+
+					"	AND x2.DATE_CANCELED < 1  "+
+					//"	AND x2.DATE_FINAL < 1 "+
+					"	AND LEFT(x2.DATE_END,7) like LEFT(CURRENT_DATE(),7) "+
+					" ) as VALUE_IN_ACTUAL,  "+
+					
+					" (select round(coalesce(SUM(x.VALUE_IN_PAY),0),2) from dbd_financial x where "+
+					"	x.MIX <> 'FINANCIAL_TRANS'  "+
+					"	AND x.VALUE_IN > 0 "+
+					"	AND x.VALUE_IN_PAY > 0.00001  "+
+					"	AND x.DATE_CANCELED < 1  "+
+					"	AND LEFT(x.DATE_FINAL,7) like LEFT(CURRENT_DATE(),7) "+
+					"	AND LEFT(x.DATE_END,7)   like LEFT(CURRENT_DATE(),7) "+
+					" ) as VALUE_IN_PAY_ACTUAL,  "+
+					
+					/*
+					" (select round(coalesce(SUM(x.VALUE_IN),0),2) from dbd_financial x where "+
+					"	MIX <> 'FINANCIAL_TRANS'  "+
+					"	AND x.VALUE_IN > 0 "+
+					"	AND x.VALUE_IN_PAY = 0  "+
+					"	AND x.DATE_CANCELED < 1  "+
+					"	AND x.DATE_FINAL < 1 "+
+					"	AND YEAR(x.DATE_END)  <= YEAR(CURRENT_DATE() - INTERVAL 1 MONTH) "+
+					"	AND MONTH(x.DATE_END) <= MONTH(CURRENT_DATE() - INTERVAL 1 MONTH) "+
+					" ) as VALUE_IN_PREVIOUS_ON_YEAR,  "+
+					*/
+					
+					" (select round(coalesce(SUM(x.VALUE_IN),0),2) from dbd_financial x where "+
+					"	x.MIX <> 'FINANCIAL_TRANS'  "+
+					"	AND x.VALUE_IN > 0 "+
+					"	AND x.VALUE_IN_PAY = 0  "+
+					"	AND x.DATE_CANCELED < 1  "+
+					"	AND x.DATE_FINAL < 1 "+
+					"	AND LEFT(x.DATE_END,7) <= LEFT(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH),7) "+
+					" ) as VALUE_IN_PREVIOUS_PASS,  "+
+					
+					" (select round(coalesce(SUM(x.VALUE_IN_PAY),0),2) from dbd_financial x where   "+
+					"	x.MIX <> 'FINANCIAL_TRANS'  "+
+					"	AND x.VALUE_IN_PAY > 0.00001 "+
+					"	AND x.DATE_CANCELED < 1  "+
+					"	AND LEFT(x.DATE_FINAL,7) like LEFT(CURRENT_DATE(),7) "+
+					"	AND LEFT(x.DATE_END,7) <= LEFT(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH),7) "+
+					" ) as VALUE_IN_PAY_PREVIOUS_PASS, "+
+					
+					/* *********************************************************************************** */
+					/* value OUT */
+					/* *********************************************************************************** */
+					
+					" (select round(coalesce(SUM(x.VALUE_OUT),0),2) from dbd_financial x where "+
+					" 	x.MIX <> 'FINANCIAL_TRANS'  "+
+					"	AND x.VALUE_OUT > 0 "+
+					//"	AND x.VALUE_OUT_PAY = 0  "+
+					"	AND x.DATE_CANCELED < 1  "+
+					//"	AND x.DATE_FINAL < 1 "+
+					"	AND LEFT(x.DATE_END,7) like LEFT(CURRENT_DATE(),7) "+
+					" ) as VALUE_OUT_ACTUAL,  "+
+					
+					" (select round(coalesce(SUM(x.VALUE_OUT_PAY),0),2) from dbd_financial x where "+
+					"	x.MIX <> 'FINANCIAL_TRANS'  "+
+					"	AND x.VALUE_OUT > 0 "+
+					"	AND x.VALUE_OUT_PAY > 0.00001  "+
+					"	AND x.DATE_CANCELED < 1  "+
+					"	AND LEFT(x.DATE_FINAL,7) like LEFT(CURRENT_DATE(),7) "+
+					"	AND LEFT(x.DATE_END,7)   like LEFT(CURRENT_DATE(),7) "+
+					" ) as VALUE_OUT_PAY_ACTUAL,  "+
+					
+					/*
+					" (select round(coalesce(SUM(x.VALUE_OUT),0),2) from dbd_financial x where "+
+					"	MIX <> 'FINANCIAL_TRANS'  "+
+					"	AND x.VALUE_OUT > 0 "+
+					"	AND x.VALUE_OUT_PAY = 0  "+
+					"	AND x.DATE_CANCELED < 1  "+
+					"	AND x.DATE_FINAL < 1 "+
+					"	AND YEAR(x.DATE_END)  <= YEAR(CURRENT_DATE() - INTERVAL 1 MONTH) "+
+					"	AND MONTH(x.DATE_END) <= MONTH(CURRENT_DATE() - INTERVAL 1 MONTH) "+
+					" ) as VALUE_OUT_PREVIOUS_ON_YEAR,  "+
+					*/
+					
+					" (select round(coalesce(SUM(x.VALUE_OUT),0),2) from dbd_financial x where "+
+					"	x.MIX <> 'FINANCIAL_TRANS'  "+
+					"	AND x.VALUE_OUT > 0 "+
+					"	AND x.VALUE_OUT_PAY = 0  "+
+					"	AND x.DATE_CANCELED < 1  "+
+					"	AND x.DATE_FINAL < 1 "+
+					"	AND LEFT(x.DATE_END,7) <= LEFT(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH),7) "+
+					" ) as VALUE_OUT_PREVIOUS_PASS,  "+
+					
+					" (select round(coalesce(SUM(x.VALUE_OUT_PAY),0),2) from dbd_financial x where   "+
+					"	x.MIX <> 'FINANCIAL_TRANS'  "+
+					"	AND x.VALUE_OUT_PAY > 0.00001 "+
+					"	AND x.DATE_CANCELED < 1  "+
+					"	AND LEFT(x.DATE_FINAL,7) like LEFT(CURRENT_DATE(),7) "+
+					"	AND LEFT(x.DATE_END,7) <= LEFT(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH),7) "+
+					" ) as VALUE_OUT_PAY_PREVIOUS_PASS, "+
+					
+					
+					" (select round(coalesce(SUM(x.VALUE_IN     ),0),2) from dbd_financial x where  LEFT(x.DATE_END,7)   like LEFT('"+dt+"',7) AND x.DATE_CANCELED < 1 AND x.MIX <> 'FINANCIAL_TRANS' AND x.VALUE_IN  > 0     ) as VALUE_IN, "+ 
+					" (select round(coalesce(SUM(x.VALUE_OUT    ),0),2) from dbd_financial x where  LEFT(x.DATE_END,7)   like LEFT('"+dt+"',7) AND x.DATE_CANCELED < 1 AND x.MIX <> 'FINANCIAL_TRANS' AND x.VALUE_OUT > 0	  ) as VALUE_OUT,  "+
+					" (select round(coalesce(SUM(x.VALUE_IN_PAY ),0),2) from dbd_financial x where  LEFT(x.DATE_FINAL,7) like LEFT('"+dt+"',7) AND x.DATE_CANCELED < 1 AND x.MIX <> 'FINANCIAL_TRANS' AND x.VALUE_IN_PAY  > 0 ) as VALUE_IN_PAY,  "+
+					" (select round(coalesce(SUM(x.VALUE_OUT_PAY),0),2) from dbd_financial x where  LEFT(x.DATE_FINAL,7) like LEFT('"+dt+"',7) AND x.DATE_CANCELED < 1 AND x.MIX <> 'FINANCIAL_TRANS' AND x.VALUE_OUT_PAY > 0 ) as VALUE_OUT_PAY  "+
+					
+					" from dbd_financial j where j.ID >= 0 LIMIT 0,1 "+
+					
+					"";
+				
+				//new gnncAlert().__description(sql,'balanço mes');
+				
+				_safeXfinal.__sql(sql,'','',fResultEvent,fFaultEvent);
+				
+				function fResultEvent(e:ResultEvent):void
+				{
+					//new gnncAlert().__dataGrid(_safeXfinal.DATA_ARR);
+					
+					if(_safeXfinal.DATA_ROWS==0)
+						return;
+					
+					var obj:Object = _safeXfinal.DATA_ARR.getItemAt(0);
+					
+					//actual month
+					var bipa:Number                      = ( Number(obj.VALUE_IN_ACTUAL)>0 ) ? (Math.round(Number(obj.VALUE_IN_PAY_ACTUAL) / Number(obj.VALUE_IN_ACTUAL) * 100)*1) : 0 ;
+					balanceInPayActual.percentWidth      = bipa > 100 ? 100 : bipa ;
+					balanceInPayActualPercent.text       = bipa + '%';
+					balanceInPayActualValue.text         = gnncDataNumber.__safeReal(obj.VALUE_IN_ACTUAL,1,'');
+					balanceInPayActualValueFinal.text    = gnncDataNumber.__safeReal(obj.VALUE_IN_PAY_ACTUAL,1,'');
+					
+					var bopa:Number                      = ( Number(obj.VALUE_OUT_ACTUAL)>0 ) ? (Math.round(Number(obj.VALUE_OUT_PAY_ACTUAL) / Number(obj.VALUE_OUT_ACTUAL) * 100)*1) : 0 ;
+					balanceOutPayActual.percentWidth     = bopa > 100 ? 100 : bopa ;
+					balanceOutPayActualPercent.text      = bopa + '%';
+					balanceOutPayActualValue.text        = gnncDataNumber.__safeReal(obj.VALUE_OUT_ACTUAL,1,'');
+					balanceOutPayActualValueFinal.text   = gnncDataNumber.__safeReal(obj.VALUE_OUT_PAY_ACTUAL,1,'');
+					
+					balenceInActualLine.percentWidth     = Math.round( Number(obj.VALUE_IN_ACTUAL )     / (Number(obj.VALUE_IN_ACTUAL)     + Number(obj.VALUE_OUT_ACTUAL    )) * 100);
+					balenceOutActualLine.percentWidth    = Math.round( Number(obj.VALUE_OUT_ACTUAL)     / (Number(obj.VALUE_IN_ACTUAL)     + Number(obj.VALUE_OUT_ACTUAL    )) * 100);
+					balenceInPayActualLine.percentWidth  = Math.round( Number(obj.VALUE_IN_PAY_ACTUAL ) / (Number(obj.VALUE_IN_PAY_ACTUAL) + Number(obj.VALUE_OUT_PAY_ACTUAL)) * 100);
+					balenceOutPayActualLine.percentWidth = Math.round( Number(obj.VALUE_OUT_PAY_ACTUAL) / (Number(obj.VALUE_IN_PAY_ACTUAL) + Number(obj.VALUE_OUT_PAY_ACTUAL)) * 100);
+					
+					//balancePayActual.text = '';//gnncDataNumber.__safeReal( Number(obj.VALUE_IN_PAY_ACTUAL) - Number(obj.VALUE_OUT_PAY_ACTUAL) ,2,'');
+					
+					//pass
+					var bipp:Number                      = ( Number(obj.VALUE_IN_PREVIOUS_PASS)>0 ) ? (Math.round(Number(obj.VALUE_IN_PAY_PREVIOUS_PASS) / Number(obj.VALUE_IN_PREVIOUS_PASS) * 100)*1) : 0 ;
+					balanceInPayPass.percentWidth        = bipp > 100 ? 100 : bipp ;
+					balanceInPayPassPercent.text         = bipp + '%';
+					balanceInPayPassValue.text           = gnncDataNumber.__safeReal(obj.VALUE_IN_PREVIOUS_PASS,1,'');
+					balanceInPayPassValueFinal.text      = gnncDataNumber.__safeReal(obj.VALUE_IN_PAY_PREVIOUS_PASS,1,'');
+					
+					var bopp:Number                      = ( Number(obj.VALUE_OUT_PREVIOUS_PASS)>0 ) ? (Math.round(Number(obj.VALUE_OUT_PAY_PREVIOUS_PASS) / Number(obj.VALUE_OUT_PREVIOUS_PASS) * 100)*1) : 0 ;
+					balanceOutPayPass.percentWidth       = bopp > 100 ? 100 : bopp ;
+					balanceOutPayPassPercent.text        = bopp + '%';
+					balanceOutPayPassValue.text          = gnncDataNumber.__safeReal(obj.VALUE_OUT_PREVIOUS_PASS,1,'');
+					balanceOutPayPassValueFinal.text     = gnncDataNumber.__safeReal(obj.VALUE_OUT_PAY_PREVIOUS_PASS,1,'');
+					
+					balenceInPassLine.percentWidth       = Math.round( Number(obj.VALUE_IN_PREVIOUS_PASS )     / (Number(obj.VALUE_IN_PREVIOUS_PASS)     + Number(obj.VALUE_OUT_PREVIOUS_PASS    )) * 100);
+					balenceOutPassLine.percentWidth      = Math.round( Number(obj.VALUE_OUT_PREVIOUS_PASS)     / (Number(obj.VALUE_IN_PREVIOUS_PASS)     + Number(obj.VALUE_OUT_PREVIOUS_PASS    )) * 100);
+					balenceInPayPassLine.percentWidth    = Math.round( Number(obj.VALUE_IN_PAY_PREVIOUS_PASS ) / (Number(obj.VALUE_IN_PAY_PREVIOUS_PASS) + Number(obj.VALUE_OUT_PAY_PREVIOUS_PASS)) * 100);
+					balenceOutPayPassLine.percentWidth   = Math.round( Number(obj.VALUE_OUT_PAY_PREVIOUS_PASS) / (Number(obj.VALUE_IN_PAY_PREVIOUS_PASS) + Number(obj.VALUE_OUT_PAY_PREVIOUS_PASS)) * 100);
+					
+					//balancePayPass.text = '';//gnncDataNumber.__safeReal( Number(obj.VALUE_IN_PAY_PREVIOUS_PASS) - Number(obj.VALUE_OUT_PAY_PREVIOUS_PASS) ,2,'');
+					
+					//all
+					//balanceAllError.setStyle     ('alpha', (Number(obj.DATA_ROWS)==0?0.3:1) );
+					//balanceAllError.toolTip      = Number(obj.ROWS_ERROR)==0?'Nenhuma irregularidade encontrada':'Encontrado irregularidade(s): '+obj.ROWS_ERROR;
+					
+					/*balanceAllInTooltip.toolTip  = 'Receitas (Mês)\nOrçado: '+gnncDataNumber.__safeReal(obj.VALUE_IN_ACTUAL) +'\nRealizado: '+gnncDataNumber.__safeReal(Number(obj.VALUE_IN_PAY_ACTUAL) +Number(obj.VALUE_IN_PAY_PREVIOUS_PASS));
+					balanceAllOutTooltip.toolTip = 'Despesas (Mês)\nOrçado: '+gnncDataNumber.__safeReal(obj.VALUE_OUT_ACTUAL)+'\nRealizado: '+gnncDataNumber.__safeReal(Number(obj.VALUE_OUT_PAY_ACTUAL)+Number(obj.VALUE_OUT_PAY_PREVIOUS_PASS));
+					
+					balanceAllIn.percentWidth    = (obj.VALUE_IN_ACTUAL ) ? Math.round( (Number(obj.VALUE_IN_PAY_ACTUAL ) + Number(obj.VALUE_IN_PAY_PREVIOUS_PASS) ) / Number(obj.VALUE_IN_ACTUAL) * 100) : 0 ;
+					balanceAllOut.percentWidth   = (obj.VALUE_OUT_ACTUAL) ? Math.round( (Number(obj.VALUE_OUT_PAY_ACTUAL) + Number(obj.VALUE_OUT_PAY_PREVIOUS_PASS)) / Number(obj.VALUE_OUT_ACTUAL)* 100) : 0 ;
+					
+					balanceAllInPercent.text     = balanceAllIn.percentWidth  + '%';
+					balanceAllOutPercent.text    = balanceAllOut.percentWidth + '%';
+					
+					balanceAllInValue.text       = gnncDataNumber.__safeReal( Number(obj.VALUE_IN_ACTUAL) );
+					balanceAllOutValue.text      = gnncDataNumber.__safeReal( Number(obj.VALUE_OUT_ACTUAL));*/
+					
+					/*
+					VALUE_IN_ACTUAL
+					VALUE_IN_PAY_ACTUAL
+					VALUE_IN_PREVIOUS_PASS					
+					VALUE_IN_PAY_PREVIOUS_PASS
+					VALUE_IN_PREVIOUS_ON_YEAR
+					
+					VALUE_OUT_ACTUAL
+					VALUE_OUT_PAY_ACTUAL
+					VALUE_OUT_PREVIOUS_PASS
+					VALUE_OUT_PAY_PREVIOUS_PASS
+					VALUE_OUT_PREVIOUS_ON_YEAR
+					
+					*/
+					
+				}
+				
+				function fFaultEvent(e:FaultEvent):void
+				{
+				}
+			}
+			
+			private function __REPORT_GROUP():void
+			{
+				
+				//var _COLUMNS:String =  "coalesce((select NAME from dbd_group where ID like dbd_financial.ID_GROUP),'Sem classificação') as label, round(SUM(VALUE_OUT),2) as value";
+				//var _MON:String = " DATE_END >= '"+_year+"-"+gnncDataNumber.__setZero(_month+1)+"-00' AND DATE_END <= '"+_year+"-"+gnncDataNumber.__setZero(_month+2)+"-00' AND DATE_CANCELED < 1 ";
+				//var _SQL:String = " SELECT "+_COLUMNS+" from dbd_financial WHERE "+_MON+" AND VALUE_OUT > 0 AND MIX <> 'FINANCIAL_TRANS' group by ID_GROUP ORDER BY value DESC limit 0,10 ";
+				
+				var m:String = _year+'-'+gnncDataNumber.__setZero(_month+1)+'-00';
+				var sql:String = "" +
+					" select " +
+					" " +
+					" coalesce(g.NAME,'Sem classificação') as label, " +
+					" round(SUM(f.VALUE_OUT),2) as value " +
+					" " +
+					" from dbd_financial f left join dbd_group g on (f.ID_GROUP = g.ID) " +
+					" where " +
+					" LEFT(f.DATE_END,7) >= LEFT('"+m+"',7) AND f.DATE_CANCELED < 1 " +
+					" AND f.VALUE_OUT > 0 AND f.MIX <> 'FINANCIAL_TRANS' " +
+					" group by f.ID_GROUP " +
+					" order by value desc " +
+					" limit 0,10 ";
+				
+				//_connFinancialGroupOut.__clear();
+				_connFinancialGroupOut.__sql(sql,'','',fResultEvent,fFaultEvent);
+				
+				function fResultEvent(e:ResultEvent):void
+				{
+					financialPieOut_.dataProvider = _connFinancialGroupOut.DATA_ARR;
+					financialPieOutLegend_.dataProvider = financialPieOut_;
+				}
+				
+				function fFaultEvent(e:FaultEvent):void
+				{
+				}
+				
+			}
+			
+			private function __safeMonth():void
+			{
+				
+				var _sql:String = " select " +
+					" ID, " +
+					
+					" round( coalesce(SUM(VALUE_IN_PAY )-SUM(VALUE_OUT_PAY),0),2) as VALUE_TOTAL, "+
+					" round( coalesce(SUM(VALUE_IN_PAY ),0),2) as VALUE_IN, "+
+					" round( coalesce(SUM(VALUE_OUT_PAY),0),2) as VALUE_OUT, "+
+					
+					" DAY(DATE_FINAL)        as DAY, " +
+					" SUBSTR(DATE_FINAL,9,2) as label, " +
+					" COUNT(ID)              as ROWS_FINANCIAL, " +
+					" DATE_FINAL " +
+					
+					" from dbd_financial " +					
+					" where " +
+					" DATE_FINAL >= '"+_year+"-"+gnncDataNumber.__setZero(_month+1)+"-00 00:00:00' AND DATE_FINAL <= '"+_year+"-"+gnncDataNumber.__setZero(_month+2)+"-00 00:00:00' AND " + 
+					" DATE_CANCELED < 1 AND " +
+					" MIX <> 'FINANCIAL_TRANS'" +
+					" group by DAY " +
+					" order by DAY asc " ;
+				
+				_safeMonth.__clear();
+				_safeMonth.__sql(_sql,'','',__fResult,__fFault);
+				
+				function __fResult(e:*):void
+				{
+					if(_safeMonth.DATA_ROWS == 0)
+						return;
+					
+					var actual_sum_in:Number  = 0;
+					var actual_sum_out:Number = 0;
+					var actual_sum_ttl:Number = 0;
+					
+					for(var i:uint=0; i<_safeMonth.DATA_ROWS; i++)
+					{
+						actual_sum_in 									= Number(actual_sum_in  + Number(_safeMonth.DATA_ARR.getItemAt(i).VALUE_IN));
+						actual_sum_out 									= Number(actual_sum_out + Number(_safeMonth.DATA_ARR.getItemAt(i).VALUE_OUT));
+						actual_sum_ttl 									= Number(actual_sum_ttl + Number(_safeMonth.DATA_ARR.getItemAt(i).VALUE_TOTAL));
+						_safeMonth.DATA_ARR.getItemAt(i).VALUE_IN 		= Number(actual_sum_in.toFixed(2));
+						_safeMonth.DATA_ARR.getItemAt(i).VALUE_OUT 		= Number(actual_sum_out.toFixed(2));
+						_safeMonth.DATA_ARR.getItemAt(i).VALUE_TOTAL 	= Number(actual_sum_ttl.toFixed(2));
+					}
+					
+					_safeMonth.DATA_ARR.refresh();
+					safeMonth_.dataProvider = _safeMonth.DATA_ARR;
+				};
+				
+				function __fFault(e:*):void
+				{
+					safeMonth_.dataProvider = new ArrayCollection();
+				};
+				
+			}
+			
+			private function __financialChartBanlance(lastMonths_:int,orYear_:uint=0):void
+			{
+				balanceOfYear.alpha = .5;
+				
+				var dS:String = gnncDate.__date2String(DateUtils.dateAdd(DateUtils.MONTH,lastMonths_,new Date())).substr(0,7);
+				var dE:String = gnncDate.__date2String(new Date()).substr(0,7);
+				
+				var _sql:String = "" +
+					
+					" select "+
+					
+					//" round( coalesce(SUM(f.VALUE_IN_PAY )-SUM(f.VALUE_OUT_PAY),0),2) as SAFE_TOTAL, "+
+					" round( coalesce(SUM(f.VALUE_IN_PAY ),0),2) as SAFE_IN, "+
+					" round( coalesce(SUM(f.VALUE_OUT_PAY),0),2) as SAFE_OUT, "+
+					
+					" (select round(coalesce(SUM(x.VALUE_IN_PAY)-SUM(x.VALUE_OUT_PAY),0),2) from dbd_financial x where LEFT(x.DATE_FINAL,7) <= LEFT(f.DATE_FINAL,7) AND x.MIX <> 'FINANCIAL_TRANS' AND x.DATE_CANCELED < 1 ) as ACCOUNT_TOTAL, " +
+					
+					" (CASE " +
+					"    WHEN MONTH(f.DATE_FINAL) like '1'  THEN CONCAT('Jan ',YEAR(f.DATE_FINAL)) " +
+					"    WHEN MONTH(f.DATE_FINAL) like '2'  THEN CONCAT('Fev ',YEAR(f.DATE_FINAL)) " +
+					"    WHEN MONTH(f.DATE_FINAL) like '3'  THEN CONCAT('Mar ',YEAR(f.DATE_FINAL)) " +
+					"    WHEN MONTH(f.DATE_FINAL) like '4'  THEN CONCAT('Abr ',YEAR(f.DATE_FINAL)) " +
+					"    WHEN MONTH(f.DATE_FINAL) like '5'  THEN CONCAT('Mai ',YEAR(f.DATE_FINAL)) " +
+					"    WHEN MONTH(f.DATE_FINAL) like '6'  THEN CONCAT('Jun ',YEAR(f.DATE_FINAL)) " +
+					"    WHEN MONTH(f.DATE_FINAL) like '7'  THEN CONCAT('Jul ',YEAR(f.DATE_FINAL)) " +
+					"    WHEN MONTH(f.DATE_FINAL) like '8'  THEN CONCAT('Ago ',YEAR(f.DATE_FINAL)) " +
+					"    WHEN MONTH(f.DATE_FINAL) like '9'  THEN CONCAT('Set ',YEAR(f.DATE_FINAL)) " +
+					"    WHEN MONTH(f.DATE_FINAL) like '10' THEN CONCAT('Out ',YEAR(f.DATE_FINAL)) " +
+					"    WHEN MONTH(f.DATE_FINAL) like '11' THEN CONCAT('Nov ',YEAR(f.DATE_FINAL)) " +
+					"    WHEN MONTH(f.DATE_FINAL) like '12' THEN CONCAT('Dez ',YEAR(f.DATE_FINAL)) " +
+					"    ELSE 'Outros' " +
+					" END) as MONTH, " +
+					
+					" CONCAT(YEAR(f.DATE_FINAL),MONTH(f.DATE_FINAL)) as YM " +
+					
+					" from dbd_financial f " +
+					" where " +
+					" LEFT(f.DATE_FINAL,7) >= LEFT('"+dS+"-00',7) AND LEFT(f.DATE_FINAL,7) <= LEFT('"+dE+"-00',7) AND " +
+					" f.MIX <> 'FINANCIAL_TRANS' AND " +
+					" f.DATE_CANCELED < 1 AND " + 
+					" f.DATE_FINAL > 0 AND " +
+					" ( f.VALUE_IN_PAY > 0 OR f.VALUE_OUT_PAY > 0 ) " +
+					" group by MONTH " +
+					" order by f.DATE_FINAL ASC";
+				
+				//new gnncAlert().__alert(_sql);
+				
+				_balanceOfYear.__clear();
+				_balanceOfYear.__sql(_sql,'','',__fResult,__fFault);
+				
+				function __fResult(e:*):void
+				{
+					balanceOfYear.alpha = 1;
+					balanceOfYear.dataProvider = balanceOfYearMonth.dataProvider = _balanceOfYear.DATA_ARR;
+				}	
+				function __fFault(e:*):void
+				{ 
+					balanceOfYear.alpha = 1;
+					balanceOfYear.dataProvider = balanceOfYearMonth.dataProvider = new ArrayCollection();
+				}
+			}
+			
+			private function labelSafe(labelValue:Object, previousValue:Object, axis:IAxis):String
+			{
+				axis.displayName;
+				axis.unitSize;
+				axis.title;
+				return gnncDataNumber.__safeReal(labelValue);
+			}
+			
+			private function dataTipFunction(event:HitData):String  
+			{  
+				var result:String = "-";  
+				return result;
+				var item:LineSeriesItem = event.chartItem as LineSeriesItem;  
+				var seriesDisplayName:String = (item.element as LineSeries).displayName;  
+				var xValue:Date = item.xValue as Date;  
+				var yValue:Number = item.yValue as Number;  
+				//var monthNumber:Number = DateUtils.dateDiff(DateUtils.MONTH, Consts.START_DATE, xValue) + 1;  
+				var profit:Number;  
+				var seriesName:String;  
+				
+				result += '<font size="13" >TESTANDO</font>';  
+				
+				return result;  
+			}  
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		
+		<mx:SolidColor id="vOut1" alpha="0.1" color="0xcf1321"/>
+		<mx:SolidColor id="vIn1" alpha="0.1" color="0x6cb831"/>
+		<mx:SolidColor id="vFinal1" alpha="0.1" color="0x0194da"/>
+		
+		<mx:SolidColorStroke id="vOut2" alpha="1" color="0xcf1321"/>
+		<mx:SolidColorStroke id="vIn2" alpha="1" color="0x6cb831"/>
+		<mx:SolidColorStroke id="vFinal2" alpha="1" color="0x0194da"/>
+		
+		<mx:Move id="movie" duration="1000"/>
+		<mx:SeriesInterpolate id="char" duration="1000" />
+		
+	</fx:Declarations>
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";		
+		.pLetter {
+			letterSpacing: 1.6;
+		}
+	</fx:Style>
+	
+	<s:Rect width="100%" height="100%" alpha="1">
+		<s:fill>
+			<s:SolidColor color="0xeeeeee" />
+		</s:fill>
+	</s:Rect>
+	
+	<s:HGroup id="groupMain_"  width="100%" height="100%" gap="0">
+		
+		<s:Group left="0" width="66" height="100%">
+			
+			<elements:elementBarStatus width="66" height="100%" alpha="1"/>
+			<s:VGroup width="66" height="100%" gap="1">
+				
+				<s:Button toolTip="Atualizar" width="100%" height="60"  click="{__refreshAll();}" 
+						  icon="{gnncEmbedBlackWhite.bw_refresh_32}" 
+						  skinClass="GNNC.skin.button.skin_buttonLink"/>
+
+				<s:Button toolTip="Lançamentos" width="100%" height="60" id="financialSafe_" 
+						  icon="{gnncEmbedBlackWhite.bw_financial_32_safe}" 
+						  skinClass="GNNC.skin.button.skin_buttonLink"/>
+
+				<s:Button toolTip="Receita" width="100%" height="60" id="financialSafeIn_" 
+						  icon="{gnncEmbedBlackWhite.bw_financial_32_safe_in}" 
+						  skinClass="GNNC.skin.button.skin_buttonLink"/>
+				
+				<s:Button toolTip="Despesa" width="100%" height="60" id="financialSafeOut_"
+						  icon="{gnncEmbedBlackWhite.bw_financial_32_safe_out}" 
+						  skinClass="GNNC.skin.button.skin_buttonLink"/>
+				
+			</s:VGroup>
+			
+			<elements:elementVLine right="0" _COLOR="0xdddddd" alpha=".7"/>
+
+		</s:Group>
+		
+
+		<s:Group width="250" height="100%">
+			
+			<elements:elementBarStatus width="100%" height="100%" alpha="1"/>
+			
+			<elements:elementVLine right="0" _COLOR="0xdddddd" alpha=".7"/>
+			
+			<s:VGroup width="100%" height="100%" gap="2" padding="20">
+				
+				<s:Group width="100%" height="100%">
+					
+				<elements:elementPanelSimple
+					title="CONTAS" number="" 
+					backgroundColor="0xffffff" backgroundColorTitle="0xf9f9f9" titleColor="0x777777" 
+					height="100%" width="100%"
+					/>
+				<s:VGroup id="finacialAccountGroup_" width="100%" height="100%" gap="0" paddingLeft="10" paddingBottom="15" paddingTop="40" paddingRight="10" enabled="false">
+
+					<s:List id="ACCOUNT_" width="100%" height="100%" borderVisible="false"
+							contentBackgroundAlpha="1" contentBackgroundColor="0xFFFFFF"
+							dataProvider="{_gnncGlobal._FINANCIAL_ACCOUNT.DATA_ARR}"
+							horizontalScrollPolicy="off"
+							itemRenderer="GNNC.modules.financial.itemRender.itemRender_financialAccountBox_forList">
+						<s:layout>
+							<s:VerticalLayout gap="0" rowHeight="50"/>
+						</s:layout>
+					</s:List>
+					<s:Group width="180" height="30">
+						<elements:elementHLine height="1" _COLOR="0xDDDDDD"/>
+						<!--elements:elementBarStatus radiusX="0"/-->
+						<s:HGroup width="180" height="30" color="0x000000" paddingLeft="7" paddingRight="7"
+								  verticalAlign="middle">
+							<s:Label width="100%" fontWeight="bold" text="Saldo Contas:"/>
+							<s:Label id="valueTotalVisibleAccounts_" fontWeight="bold" text=""/>
+						</s:HGroup>
+					</s:Group>
+					<s:Group width="180" height="30">
+						<elements:elementHLine height="1" _COLOR="0xDDDDDD"/>
+						<!--elements:elementBarStatus radiusX="0"/-->
+						<s:HGroup width="180" height="30" color="0x666666" paddingLeft="7" paddingRight="7"
+								  verticalAlign="middle">
+							<s:Label width="100%" fontSize="9" fontWeight="normal" styleName="pLetter"
+									 text="Armazenado:"/>
+							<s:Label id="valueTotalGeneralAccounts_" fontSize="9" fontWeight="normal"
+									 styleName="pLetter" text=""/>
+						</s:HGroup>
+					</s:Group>
+					<s:Group bottom="0" width="180" height="30">
+						<elements:elementBarStatus/>
+						<s:HGroup width="180" height="30" gap="-1">
+							<s:Button width="100%" height="30" click="{__financialAccountList()}"
+									  icon="{gnncEmbedBlackWhite.bw_refresh_16}" toolTip="Atualizar Contas"/>
+							<s:Button width="30" height="30" label="Nova Conta"
+									  click="{__financialAccountNew()}"
+									  icon="{gnncEmbedBlackWhite.bw_new_16}"/>
+							<s:Button width="30" height="30" label="Editar Conta"
+									  click="{__financialAccountEdit()}"
+									  icon="{gnncEmbedBlackWhite.bw_edit_16}"/>
+							<s:Button width="30" height="30" label="Excluir Conta"
+									  click="{__financialAccountDelete()}"
+									  icon="{gnncEmbedBlackWhite.bw_delete_16}"/>
+							<!-- s:Button width="30" height="30" label="Acesso às Contas"
+							click="{__financialAccountAccess()}"
+							icon="{gnncEmbedBlackWhite.bw_access_16_lock}"/ -->
+						</s:HGroup>
+					</s:Group>
+
+				</s:VGroup>
+				
+				</s:Group>
+					
+			</s:VGroup>
+			
+		</s:Group>
+		
+		
+				
+		<s:VGroup width="100%" height="100%" gap="0" padding="20">
+			<s:Scroller width="100%" height="100%" verticalScrollPolicy="off">
+				<s:HGroup width="100%" gap="5" paddingBottom="1" paddingLeft="1" paddingRight="1" paddingTop="2">
+
+					
+					
+					
+					<s:VGroup width="200" height="100%" gap="3">
+						
+					
+						<elements:elementPanelSimple
+							title="RECEITAS" number="" numberSize="20"
+							backgroundColor="0x00cc99" backgroundColorTitle="0x00aa80" titleColor="0xffffff"
+							backgroundColorShadow="0x00aa80"
+							numberColor="0xffffff"
+							maxHeight="100" height="100%"
+							/>
+						
+						<elements:elementPanelSimple
+							title="DESPESAS" number="" numberSize="20" 
+							backgroundColor="0xe84500" backgroundColorTitle="0xcc3300" titleColor="0xffffff"
+							backgroundColorShadow="0xcc3300"
+							numberColor="0xffffff"
+							maxHeight="100" height="100%"
+							/>
+
+						<s:Group width="100%" >
+							<elements:elementPanelSimple
+								title="MOVIMENTO DE HOJE" number="" 
+								backgroundColor="0xffffff" backgroundColorTitle="0xf9f9f9" titleColor="0x777777" 
+								height="100%" width="100%"
+								/>
+							<s:VGroup width="100%" height="100%" gap="0" paddingLeft="10" paddingBottom="15" paddingTop="40" paddingRight="10" >
+								
+								<elements:elementLabelFont fontSize="25" text="-" verticalAlign="middle" width="100%" textAlign="right" fontWeight="normal" color="0x2da899"/>
+								<elements:elementLabelFont fontSize="25" text="-" verticalAlign="middle" width="100%" textAlign="right" fontWeight="normal" color="0xcc3300"/>
+								
+							</s:VGroup>
+						</s:Group>
+
+						<s:Group width="100%" >
+							<elements:elementPanelSimple
+								title="MOVIMENTO DO MÊS" number="" 
+								backgroundColor="0xffffff" backgroundColorTitle="0xf9f9f9" titleColor="0x777777" 
+								height="100%" width="100%" 
+								/>
+							<s:VGroup width="100%" height="100%" gap="0" paddingLeft="10" paddingBottom="15" paddingTop="40" paddingRight="10" >
+								
+								<elements:elementLabelFont fontSize="25" text="-" verticalAlign="middle" width="100%" textAlign="right" fontWeight="normal" color="0x2da899"/>
+								<elements:elementLabelFont fontSize="25" text="-" verticalAlign="middle" width="100%" textAlign="right" fontWeight="normal" color="0xcc3300"/>
+								
+							</s:VGroup>
+						</s:Group>
+
+						<!-- BOX BALANCO -->	
+						
+						<!-- s:Group width="100%" >
+							<elements:elementPanelSimple
+								title="PREVISÃO DO MÊS ATUAL" number="" 
+								backgroundColor="0xffffff" backgroundColorTitle="0xf9f9f9" titleColor="0x777777" 
+								height="100%" width="100%" titleAlign="left"
+								/>
+							<s:VGroup width="100%" height="100%" gap="1" paddingLeft="10" paddingBottom="0" paddingTop="40" paddingRight="10">
+																
+								<s:HGroup width="100%" height="{heightBar}" paddingLeft="0" paddingBottom="1" verticalAlign="middle">
+									<s:Group width="100%" height="{heightBar}">
+										<elements:elementBarStatus alpha=".6" height="{heightBar}" fill="{new SolidColor(0x00cc99)}" radiusX="3" radiusY="3"/>
+										<elements:elementBarStatus id="balanceInPayActual" percentWidth="0" alpha="1" height="{heightBar}" fill="{new SolidColor(0x00cc99)}" radiusX="3" radiusY="3" />
+										<elements:elementLabelFont id="balanceInPayActualPercent" left="10" height="{heightBar}" color="0xFFFFFF" fontSize="17"
+																   fontWeight="bold" text="0%" verticalAlign="middle"/>
+										<s:VGroup right="10" height="{heightBar}" color="0xFFFFFF" fontWeight="bold" verticalAlign="middle" gap="1" >
+											<elements:elementLabelFont id="balanceInPayActualValue"      fontSize="11" text="0,00" verticalAlign="middle" width="100%" textAlign="right"/>
+											<elements:elementLabelFont id="balanceInPayActualValueFinal" fontSize="17" text="0,00" verticalAlign="middle" width="100%" textAlign="right" fontWeight="normal"/>
+										</s:VGroup>
+										
+									</s:Group>
+								</s:HGroup>
+								
+								<s:HGroup width="100%" paddingBottom="1" height="{heightBar}" paddingLeft="0" verticalAlign="middle">
+									<s:Group width="100%" height="{heightBar}">
+										<elements:elementBarStatus alpha=".6" height="{heightBar}" fill="{new SolidColor(0xcc3300)}" radiusX="3" radiusY="3"/>
+										<elements:elementBarStatus id="balanceOutPayActual" percentWidth="0" alpha="1" height="{heightBar}" fill="{new SolidColor(0xcc3300)}" radiusX="3" radiusY="3"/>
+										<elements:elementLabelFont id="balanceOutPayActualPercent" left="10" height="{heightBar}" color="0xFFFFFF" fontSize="17"
+																   fontWeight="bold" text="0%" verticalAlign="middle"/> 
+										<s:VGroup right="10" height="{heightBar}" color="0xFFFFFF" fontWeight="bold" verticalAlign="middle" gap="1" >
+											<elements:elementLabelFont id="balanceOutPayActualValue"      fontSize="11" text="0,00" verticalAlign="middle" width="100%" textAlign="right"/>
+											<elements:elementLabelFont id="balanceOutPayActualValueFinal" fontSize="17" text="0,00" verticalAlign="middle" width="100%" textAlign="right" fontWeight="normal"/>
+										</s:VGroup>
+									</s:Group>
+								</s:HGroup>
+								
+								<s:HGroup paddingTop="1" paddingBottom="1" gap="1" width="100%" toolTip="{'Receita x Despesa\nProporção %\n( Prevista / Orçada )'}">
+									<elements:elementBarStatus id="balenceInActualLine"  alpha=".4" height="{heightBarSmall}" percentWidth="0" fill="{new SolidColor(0x2da899)}" radiusX="3" radiusY="3" />
+									<elements:elementBarStatus id="balenceOutActualLine" alpha=".4" height="{heightBarSmall}" percentWidth="0" fill="{new SolidColor(0xcc3300)}" radiusX="3" radiusY="3" />
+								</s:HGroup>
+								
+								<s:HGroup paddingTop="1" paddingBottom="1" gap="1" width="100%" toolTip="{'Receita x Despesa\nProporção %\n( Faturada / Realizada )'}">
+									<elements:elementBarStatus id="balenceInPayActualLine"  alpha=".9" height="{heightBarSmall}" percentWidth="0" fill="{new SolidColor(0x2da899)}" radiusX="3" radiusY="3" />
+									<elements:elementBarStatus id="balenceOutPayActualLine" alpha=".9" height="{heightBarSmall}" percentWidth="0" fill="{new SolidColor(0xcc3300)}" radiusX="3" radiusY="3" />
+								</s:HGroup>								
+								
+							</s:VGroup>
+						</s:Group>
+						
+						
+						<s:Group width="100%" >
+							<elements:elementPanelSimple
+								title="FATURAS ATRASADAS" number="" 
+								backgroundColor="0xffffff" backgroundColorTitle="0xf9f9f9" titleColor="0x777777" 
+								height="100%" width="100%" titleAlign="left"
+								/>
+							<s:VGroup width="100%" height="100%" gap="1" paddingLeft="10" paddingBottom="0" paddingTop="40" paddingRight="10" >
+								
+								
+								<s:HGroup width="100%" height="{heightBar}" paddingLeft="0" paddingBottom="1" verticalAlign="middle">
+									<s:Group width="100%" height="{heightBar}">
+										<elements:elementBarStatus alpha=".6" height="{heightBar}" fill="{new SolidColor(0x00cc99)}" radiusX="3" radiusY="3"/>
+										<elements:elementBarStatus id="balanceInPayPass" percentWidth="0" alpha="1" height="{heightBar}" fill="{new SolidColor(0x00cc99)}" radiusX="3" radiusY="3"/>
+										<elements:elementLabelFont id="balanceInPayPassPercent" left="10" height="{heightBar}" color="0xFFFFFF" fontSize="17"
+																   fontWeight="bold" text="0%" verticalAlign="middle"/>
+										<s:VGroup right="10" height="{heightBar}" color="0xFFFFFF" fontWeight="bold" verticalAlign="middle" gap="1" >
+											<elements:elementLabelFont id="balanceInPayPassValue"      fontSize="11" text="0,00" verticalAlign="middle" width="100%" textAlign="right"/>
+											<elements:elementLabelFont id="balanceInPayPassValueFinal" fontSize="17" text="0,00" verticalAlign="middle" width="100%" textAlign="right" fontWeight="normal"/>
+										</s:VGroup>
+										
+									</s:Group>
+								</s:HGroup>
+								
+								<s:HGroup width="100%" height="{heightBar}" paddingBottom="1" paddingLeft="0" verticalAlign="middle">
+									<s:Group width="100%" height="{heightBar}">
+										<elements:elementBarStatus alpha=".6" height="{heightBar}" fill="{new SolidColor(0xcc3300)}" radiusX="3" radiusY="3"/>
+										<elements:elementBarStatus id="balanceOutPayPass" percentWidth="0" alpha="1" height="{heightBar}" fill="{new SolidColor(0xcc3300)}" radiusX="3" radiusY="3"/>
+										<elements:elementLabelFont id="balanceOutPayPassPercent" left="10" height="{heightBar}" color="0xFFFFFF" fontSize="17"
+																   fontWeight="bold" text="0%" verticalAlign="middle"/> 
+										<s:VGroup right="10" height="{heightBar}" color="0xFFFFFF" fontWeight="bold" verticalAlign="middle" gap="1" >
+											<elements:elementLabelFont id="balanceOutPayPassValue"      fontSize="11" text="0,00" verticalAlign="middle" width="100%" textAlign="right"/>
+											<elements:elementLabelFont id="balanceOutPayPassValueFinal" fontSize="17" text="0,00" verticalAlign="middle" width="100%" textAlign="right" fontWeight="normal"/>
+										</s:VGroup>
+									</s:Group>
+								</s:HGroup>
+								
+								<s:HGroup paddingTop="1" paddingBottom="1" gap="1" width="100%" toolTip="{'Receita x Despesa\nProporção %\n( Prevista / Orçada )'}">
+									<elements:elementBarStatus id="balenceInPassLine"  alpha=".4" height="{heightBarSmall}" percentWidth="0" fill="{new SolidColor(0x2da899)}" radiusX="3" radiusY="3"/>
+									<elements:elementBarStatus id="balenceOutPassLine" alpha=".4" height="{heightBarSmall}" percentWidth="0" fill="{new SolidColor(0xcc3300)}" radiusX="3" radiusY="3"/>
+								</s:HGroup>
+								
+								<s:HGroup paddingTop="1" paddingBottom="1" gap="1" width="100%" toolTip="{'Receita x Despesa\nProporção %\n( Faturada / Realizada )'}">
+									<elements:elementBarStatus id="balenceInPayPassLine"  alpha=".9" height="{heightBarSmall}" percentWidth="0" fill="{new SolidColor(0x2da899)}" radiusX="3" radiusY="3"/>
+									<elements:elementBarStatus id="balenceOutPayPassLine" alpha=".9" height="{heightBarSmall}" percentWidth="0" fill="{new SolidColor(0xcc3300)}" radiusX="3" radiusY="3"/>
+								</s:HGroup>
+								
+							</s:VGroup>
+						</s:Group>
+						-->
+						
+						
+						
+						
+						
+					</s:VGroup>
+
+					
+					
+					
+
+
+					<s:VGroup width="450" height="100%" gap="3">
+						
+
+						
+						
+						
+						
+						
+						
+						
+						<s:HGroup gap="2" width="100%">
+							
+							<s:VGroup gap="1" width="100%">
+								
+								<s:Group width="100%" height="20" color="0x777777">
+									<elements:elementBarStatus height="20" fill="{new SolidColor(0xfbfbfb)}" radiusX="3" radiusY="3"/>
+									<elements:elementLabelFont                       left="7"   height="20" fontSize="11" fontWeight="bold" verticalAlign="middle" text="PREVISÃO DO MÊS ATUAL" paddingTop="1"/>
+									<elements:elementLabelFont id="balancePayActual" right="10" height="20" fontSize="11" fontWeight="bold" verticalAlign="middle" text="" paddingTop="1"/>
+								</s:Group>
+								
+								<!-- ORCADO E REALIZADO NOVO MES ACTUAL -->	
+								<s:HGroup paddingTop="1" gap="1" width="100%">
+									
+									<s:HGroup width="100%" height="{heightBar}" paddingLeft="1" verticalAlign="middle">
+										<s:Group width="100%" height="{heightBar}">
+											<elements:elementBarStatus alpha=".7" height="{heightBar}" fill="{new SolidColor(0x2da899)}" radiusX="3" radiusY="3"/>
+											<elements:elementBarStatus id="balanceInPayActual" percentWidth="0" alpha=".9" height="{heightBar}" fill="{new SolidColor(0x2da899)}" radiusX="3" radiusY="3" />
+											<elements:elementLabelFont id="balanceInPayActualPercent" left="10" height="{heightBar}" color="0xFFFFFF" fontSize="17"
+																	   fontWeight="bold" text="0%" verticalAlign="middle"/>
+											<s:VGroup right="10" height="{heightBar}" color="0xFFFFFF" fontWeight="bold" verticalAlign="middle" gap="1" >
+												<elements:elementLabelFont id="balanceInPayActualValue"      fontSize="11" text="0,00" verticalAlign="middle" width="100%" textAlign="right"/>
+												<elements:elementLabelFont id="balanceInPayActualValueFinal" fontSize="17" text="0,00" verticalAlign="middle" width="100%" textAlign="right" fontWeight="normal"/>
+											</s:VGroup>
+											
+										</s:Group>
+									</s:HGroup>
+									
+									<s:HGroup width="100%" height="{heightBar}" paddingLeft="1" verticalAlign="middle">
+										<s:Group width="100%" height="{heightBar}">
+											<elements:elementBarStatus alpha=".7" height="{heightBar}" fill="{new SolidColor(0xcc3300)}" radiusX="3" radiusY="3"/>
+											<elements:elementBarStatus id="balanceOutPayActual" percentWidth="0" alpha=".9" height="{heightBar}" fill="{new SolidColor(0xcc3300)}" radiusX="3" radiusY="3"/>
+											<elements:elementLabelFont id="balanceOutPayActualPercent" left="10" height="{heightBar}" color="0xFFFFFF" fontSize="17"
+																	   fontWeight="bold" text="0%" verticalAlign="middle"/> 
+											<s:VGroup right="10" height="{heightBar}" color="0xFFFFFF" fontWeight="bold" verticalAlign="middle" gap="1" >
+												<elements:elementLabelFont id="balanceOutPayActualValue"      fontSize="11" text="0,00" verticalAlign="middle" width="100%" textAlign="right"/>
+												<elements:elementLabelFont id="balanceOutPayActualValueFinal" fontSize="17" text="0,00" verticalAlign="middle" width="100%" textAlign="right" fontWeight="normal"/>
+											</s:VGroup>
+										</s:Group>
+									</s:HGroup>
+									
+								</s:HGroup>
+								<s:HGroup paddingTop="1" gap="1" width="100%" toolTip="{'Receita x Despesa\nProporção %\n( Prevista / Orçada )'}">
+									<!-- s:Group width="85" height="15">
+									<elements:elementBarStatus height="15" fill="{new SolidColor(0x777777)}" radiusX="4" radiusY="4"/ -->
+									<!-- /s:Group -->
+									<!-- elements:elementLabelFont width="50" height="8" fontSize="9" paddingLeft="10" paddingRight="2"
+									fontWeight="normal" verticalAlign="middle" textAlign="right"
+									text="PREVISTO"/ -->
+									<elements:elementBarStatus id="balenceInActualLine"  alpha=".4" height="{heightBarSmall}" percentWidth="0" fill="{new SolidColor(0x2da899)}" radiusX="3" radiusY="3" />
+									<elements:elementBarStatus id="balenceOutActualLine" alpha=".4" height="{heightBarSmall}" percentWidth="0" fill="{new SolidColor(0xcc3300)}" radiusX="3" radiusY="3" />
+								</s:HGroup>
+								<s:HGroup paddingTop="1" paddingBottom="1" gap="1" width="100%" toolTip="{'Receita x Despesa\nProporção %\n( Faturada / Realizada )'}">
+									<!-- elements:elementLabelFont width="50" height="8" fontSize="9" paddingLeft="10" paddingRight="2"
+									fontWeight="normal" verticalAlign="middle" textAlign="right"
+									text="FATURADO"/ -->
+									<elements:elementBarStatus id="balenceInPayActualLine"  alpha=".9" height="{heightBarSmall}" percentWidth="0" fill="{new SolidColor(0x2da899)}" radiusX="3" radiusY="3" />
+									<elements:elementBarStatus id="balenceOutPayActualLine" alpha=".9" height="{heightBarSmall}" percentWidth="0" fill="{new SolidColor(0xcc3300)}" radiusX="3" radiusY="3" />
+								</s:HGroup>
+								<!-- FINAL -->	
+								
+								
+							</s:VGroup>
+							
+
+							
+						</s:HGroup>
+						
+						
+						
+						
+						
+						<s:HGroup gap="2" width="100%">
+						<s:VGroup gap="1" width="100%">
+							
+							<s:Group width="100%" height="20" color="0x777777">
+								<elements:elementBarStatus height="20" fill="{new SolidColor(0xfbfbfb)}" radiusX="3" radiusY="3"/>
+								<elements:elementLabelFont                     left="7"   height="20" fontSize="11" fontWeight="bold" verticalAlign="middle" text="FATURAS ATRASADAS" paddingTop="1"/>
+								<elements:elementLabelFont id="balancePayPass" right="80" height="20" fontSize="11" fontWeight="bold" verticalAlign="middle" text="" paddingTop="1"/>
+							</s:Group>
+							
+							<!-- ORCADO E REALIZADO NOVO MES ACTUAL -->	
+							<s:HGroup paddingTop="1" gap="1" width="100%">
+								
+								<s:HGroup width="100%" height="{heightBar}" paddingLeft="1" verticalAlign="middle">
+									<s:Group width="100%" height="{heightBar}">
+										<elements:elementBarStatus alpha=".7" height="{heightBar}" fill="{new SolidColor(0x2da899)}" radiusX="3" radiusY="3"/>
+										<elements:elementBarStatus id="balanceInPayPass" percentWidth="0" alpha=".9" height="{heightBar}" fill="{new SolidColor(0x2da899)}" radiusX="3" radiusY="3"/>
+										<elements:elementLabelFont id="balanceInPayPassPercent" left="10" height="{heightBar}" color="0xFFFFFF" fontSize="17"
+																   fontWeight="bold" text="0%" verticalAlign="middle"/>
+										<s:VGroup right="10" height="{heightBar}" color="0xFFFFFF" fontWeight="bold" verticalAlign="middle" gap="1" >
+											<elements:elementLabelFont id="balanceInPayPassValue"      fontSize="11" text="0,00" verticalAlign="middle" width="100%" textAlign="right"/>
+											<elements:elementLabelFont id="balanceInPayPassValueFinal" fontSize="17" text="0,00" verticalAlign="middle" width="100%" textAlign="right" fontWeight="normal"/>
+										</s:VGroup>
+										
+									</s:Group>
+								</s:HGroup>
+								
+								<s:HGroup width="100%" height="{heightBar}" paddingLeft="1" verticalAlign="middle">
+									<s:Group width="100%" height="{heightBar}">
+										<elements:elementBarStatus alpha=".7" height="{heightBar}" fill="{new SolidColor(0xcc3300)}" radiusX="3" radiusY="3"/>
+										<elements:elementBarStatus id="balanceOutPayPass" percentWidth="0" alpha=".9" height="{heightBar}" fill="{new SolidColor(0xcc3300)}" radiusX="3" radiusY="3"/>
+										<elements:elementLabelFont id="balanceOutPayPassPercent" left="10" height="{heightBar}" color="0xFFFFFF" fontSize="17"
+																   fontWeight="bold" text="0%" verticalAlign="middle"/> 
+										<s:VGroup right="10" height="{heightBar}" color="0xFFFFFF" fontWeight="bold" verticalAlign="middle" gap="1" >
+											<elements:elementLabelFont id="balanceOutPayPassValue"      fontSize="11" text="0,00" verticalAlign="middle" width="100%" textAlign="right"/>
+											<elements:elementLabelFont id="balanceOutPayPassValueFinal" fontSize="17" text="0,00" verticalAlign="middle" width="100%" textAlign="right" fontWeight="normal"/>
+										</s:VGroup>
+									</s:Group>
+								</s:HGroup>
+								
+							</s:HGroup>
+							<s:HGroup paddingTop="1" gap="1" width="100%" toolTip="{'Receita x Despesa\nProporção %\n( Prevista / Orçada )'}">
+								<!-- elements:elementLabelFont width="50" height="8" fontSize="9" paddingLeft="10" paddingRight="2"
+								fontWeight="normal" verticalAlign="middle" textAlign="right"
+								text="PREVISTO"/ -->
+								<elements:elementBarStatus id="balenceInPassLine"  alpha=".4" height="{heightBarSmall}" percentWidth="0" fill="{new SolidColor(0x2da899)}" radiusX="3" radiusY="3"/>
+								<elements:elementBarStatus id="balenceOutPassLine" alpha=".4" height="{heightBarSmall}" percentWidth="0" fill="{new SolidColor(0xcc3300)}" radiusX="3" radiusY="3"/>
+							</s:HGroup>
+							<s:HGroup paddingTop="1" paddingBottom="1" gap="1" width="100%" toolTip="{'Receita x Despesa\nProporção %\n( Faturada / Realizada )'}">
+								<!-- elements:elementLabelFont width="50" height="8" fontSize="9" paddingLeft="10" paddingRight="2"
+								fontWeight="normal" verticalAlign="middle" textAlign="right"
+								text="FATURADO"/ -->
+								<elements:elementBarStatus id="balenceInPayPassLine"  alpha=".9" height="{heightBarSmall}" percentWidth="0" fill="{new SolidColor(0x2da899)}" radiusX="3" radiusY="3"/>
+								<elements:elementBarStatus id="balenceOutPayPassLine" alpha=".9" height="{heightBarSmall}" percentWidth="0" fill="{new SolidColor(0xcc3300)}" radiusX="3" radiusY="3"/>
+							</s:HGroup>
+							<!-- FINAL -->	
+							
+						</s:VGroup>
+							</s:HGroup>
+						
+						
+						
+						
+						
+						<s:Group width="100%" height="100%" maxHeight="220">
+							
+							<elements:elementPanelSimple 
+								title="GRUPO DE DESPESAS" titleAlign="left"
+								backgroundColor="0xffffff" backgroundColorTitle="0xf9f9f9" titleColor="0x777777" />
+							<s:HGroup width="100%" height="100%" paddingLeft="10" paddingBottom="15" paddingTop="40" paddingRight="10">
+								
+								
+								<mx:PieChart id="financialPieOut_" width="170" height="170" color="0x444444"
+											 dataProvider="{new ArrayCollection()}" focusEnabled="false"
+											 showDataTips="false">
+									<mx:series>
+										<mx:PieSeries field="value" labelPosition="none"
+													  nameField="label" showDataEffect="{char}" > 
+											<mx:fills>
+												
+												<mx:SolidColor alpha="1.0" color="0x8b0d3d"/>
+												<mx:SolidColor alpha="1.0" color="0xcf1321"/>
+												<mx:SolidColor alpha="1.0" color="0xf8ad2e"/>
+												<mx:SolidColor alpha="1.0" color="0x6cb831"/>
+												<mx:SolidColor alpha="1.0" color="0x004517"/>
+												<mx:SolidColor alpha="1.0" color="0x0194da"/>
+												<mx:SolidColor alpha="1.0" color="0x004890"/>
+												<mx:SolidColor alpha="1.0" color="0x002647"/>
+												<mx:SolidColor alpha="1.0" color="0x632d81"/>
+												<mx:SolidColor alpha="1.0" color="0xffef01"/>
+												<mx:SolidColor alpha="1.0" color="0xea8d98"/>
+												
+												<mx:SolidColor alpha="1.0" color="red"/>
+												<mx:SolidColor alpha="1.0" color="haloOrange"/>
+												<mx:SolidColor alpha="1.0" color="yellow"/>
+												<mx:SolidColor alpha="1.0" color="haloGreen"/>
+												<mx:SolidColor alpha="1.0" color="haloBlue"/>
+												
+											</mx:fills>
+											<mx:filters>
+												<mx:DropShadowFilter alpha=".1" distance="1"/>
+											</mx:filters>
+										</mx:PieSeries>
+									</mx:series>
+								</mx:PieChart>
+								
+								<s:Scroller width="100%" height="100%" horizontalScrollPolicy="off">
+									<s:Group width="100%" height="100%" textAlign="left">
+										<mx:Legend id="financialPieOutLegend_" width="100%" dataProvider="{new ArrayCollection()}"
+												   fontSize="10" color="0x777777"
+												   legendItemClass="{GNNC.modules.financial.itemRender.myLegendItem}"
+												   markerHeight="1" markerWidth="1" paddingLeft="5" paddingRight="5"
+												   textAlign="left" verticalGap="1">
+										</mx:Legend>
+									</s:Group>
+								</s:Scroller>
+								
+							</s:HGroup>
+							
+						</s:Group>
+
+						
+						<s:Group width="100%" height="100%" maxHeight="220">
+							
+							<elements:elementPanelSimple 
+								title="GRUPO DE RECEITA" titleAlign="left"
+								backgroundColor="0xffffff" backgroundColorTitle="0xf9f9f9" titleColor="0x777777" />
+							<s:HGroup width="100%" height="100%" paddingLeft="10" paddingBottom="15" paddingTop="40" paddingRight="10">
+								
+								
+								<mx:PieChart id="financialPieIn_" width="170" height="170" color="0x444444"
+											 dataProvider="{new ArrayCollection()}" focusEnabled="false"
+											 showDataTips="false">
+									<mx:series>
+										<mx:PieSeries field="value" labelPosition="none"
+													  nameField="label" showDataEffect="{char}" > 
+											<mx:fills>
+												
+												<mx:SolidColor alpha="1.0" color="0x8b0d3d"/>
+												<mx:SolidColor alpha="1.0" color="0xcf1321"/>
+												<mx:SolidColor alpha="1.0" color="0xf8ad2e"/>
+												<mx:SolidColor alpha="1.0" color="0x6cb831"/>
+												<mx:SolidColor alpha="1.0" color="0x004517"/>
+												<mx:SolidColor alpha="1.0" color="0x0194da"/>
+												<mx:SolidColor alpha="1.0" color="0x004890"/>
+												<mx:SolidColor alpha="1.0" color="0x002647"/>
+												<mx:SolidColor alpha="1.0" color="0x632d81"/>
+												<mx:SolidColor alpha="1.0" color="0xffef01"/>
+												<mx:SolidColor alpha="1.0" color="0xea8d98"/>
+												
+												<mx:SolidColor alpha="1.0" color="red"/>
+												<mx:SolidColor alpha="1.0" color="haloOrange"/>
+												<mx:SolidColor alpha="1.0" color="yellow"/>
+												<mx:SolidColor alpha="1.0" color="haloGreen"/>
+												<mx:SolidColor alpha="1.0" color="haloBlue"/>
+												
+											</mx:fills>
+											<mx:filters>
+												<mx:DropShadowFilter alpha=".1" distance="1"/>
+											</mx:filters>
+										</mx:PieSeries>
+									</mx:series>
+								</mx:PieChart>
+								
+								<s:Scroller width="100%" height="100%" horizontalScrollPolicy="off">
+									<s:Group width="100%" height="100%" textAlign="left">
+										<mx:Legend id="financialPieInLegend_" width="100%" dataProvider="{new ArrayCollection()}"
+												   fontSize="10" color="0x777777"
+												   legendItemClass="{GNNC.modules.financial.itemRender.myLegendItem}"
+												   markerHeight="1" markerWidth="1" paddingLeft="5" paddingRight="5"
+												   textAlign="left" verticalGap="1">
+										</mx:Legend>
+									</s:Group>
+								</s:Scroller>
+								
+							</s:HGroup>
+							
+						</s:Group>
+						
+						
+						<s:VGroup width="450" height="100%" gap="3">
+							<s:Group width="100%" height="100%">
+								<elements:elementPanelSimple 
+									title="FECHAMENTOS DE CAIXA" titleAlign="left"
+									backgroundColor="0xffffff" backgroundColorTitle="0xf9f9f9" titleColor="0x777777" />
+							</s:Group>
+						</s:VGroup>
+							
+								
+
+						
+						
+						
+					</s:VGroup>
+					
+					<s:VGroup width="480" height="100%" gap="3">
+						
+						
+						
+						<s:Group width="100%" height="100%" maxHeight="220">
+							
+							<elements:elementPanelSimple 
+								title="MOVIMENTO DOS DIAS DO MÊS ATUAL" titleAlign="left"
+								backgroundColor="0xffffff" backgroundColorTitle="0xf9f9f9" titleColor="0x777777" />
+							<s:VGroup width="100%" height="100%" paddingLeft="10" paddingBottom="15" paddingTop="40" paddingRight="10">
+								
+								<s:HGroup width="100%" height="100%" gap="0">
+									<mx:AreaChart id="safeMonth_" width="100%" height="100%"
+												  dataProvider="{new ArrayCollection()}" fontSize="10"
+												  showDataTips="true">
+										<mx:horizontalAxis>
+											<mx:CategoryAxis categoryField="label"/>
+										</mx:horizontalAxis>
+										<mx:verticalAxis>
+											<mx:LinearAxis  labelFunction="{labelSafe}"/>
+										</mx:verticalAxis>
+										<mx:series>
+											<mx:AreaSeries areaFill="{vIn1}"    areaStroke="{vIn2}"    displayName="Receitas"    form="curve" showDataEffect="{char}" yField="VALUE_IN"/>
+											<mx:AreaSeries areaFill="{vOut1}"   areaStroke="{vOut2}"   displayName="Despesas"    form="curve" showDataEffect="{char}" yField="VALUE_OUT"/>
+											<mx:AreaSeries areaFill="{vFinal1}" areaStroke="{vFinal2}" displayName="Saldo Total" form="curve" showDataEffect="{char}" yField="VALUE_TOTAL"/>
+										</mx:series>
+										<mx:filters>
+											<mx:DropShadowFilter alpha=".0" distance="0"/>
+										</mx:filters>
+									</mx:AreaChart>
+								</s:HGroup>
+								<!-- s:Rect left="70" top="0" width="250" height="25" alpha=".8" radiusX="3" radiusY="3">
+								<s:fill>
+								<s:SolidColor alpha=".8" color="0xFFFFFF"/>
+								</s:fill>
+								</s:Rect -->
+								<!-- mx:Legend dataProvider="{MONTH_BALANCE_}" left="75"  direction="vertical"
+								horizontalGap="1" verticalGap="1" markerHeight="10" markerWidth="10"
+								scrollRect="{new Rectangle(0,0,100,100)/*new Rectangle(0,0,100,60)*/}"
+								verticalAlign="middle"/ -->
+								
+								
+								
+							</s:VGroup>
+							
+						</s:Group>
+						
+						<s:Group width="100%" height="100%" maxHeight="220">
+							
+							<elements:elementPanelSimple 
+								title="BALANÇO DOS ÚLTIMOS x MESES" titleAlign="left"
+								backgroundColor="0xffffff" backgroundColorTitle="0xf9f9f9" titleColor="0x777777" />
+							<s:VGroup width="100%" height="100%" paddingLeft="10" paddingBottom="15" paddingTop="40" paddingRight="10">
+								
+								
+								<s:HGroup left="100" height="20" right="1" verticalAlign="middle" gap="1" >
+									<s:Button label="24 meses" height="20" click="{__financialChartBanlance(-24)}"/>
+									<s:Button label="12 meses" height="20" click="{__financialChartBanlance(-12)}"/>
+									<s:Button label="10 meses" height="20" click="{__financialChartBanlance(-10)}"/>
+									<s:Button label="6 meses" height="20" click="{__financialChartBanlance(-6)}"/>
+									<s:Button label="4 meses" height="20" click="{__financialChartBanlance(-4)}"/>
+									<s:Button label="3 meses" height="20" click="{__financialChartBanlance(-3)}"/>
+								</s:HGroup>
+								
+								<mx:ColumnChart id="balanceOfYear" width="100%" height="120" columnWidthRatio=".5"
+												dataProvider="{new ArrayCollection()}" filters="[]"
+												fontSize="10" showDataTips="true" paddingBottom="0" paddingTop="0">
+									<mx:horizontalAxis>
+										<mx:CategoryAxis id="balanceOfYearMonth" categoryField="MONTH" dataProvider="{new ArrayCollection()}"/>
+									</mx:horizontalAxis>
+									<mx:verticalAxis>
+										<mx:LinearAxis  labelFunction="{labelSafe}" padding="0"/>
+										<!-- minimum="0" maximum="1" -->
+									</mx:verticalAxis>    
+									<mx:series>
+										<mx:ColumnSeries width="35" height="5" columnWidthRatio="1"
+														 displayName="Receita" fills="[0x2da899]"
+														 filters="[]" showDataEffect="{char}" xField="MONTH"
+														 yField="SAFE_IN"/>
+										<mx:ColumnSeries width="55" minWidth="25" height="5" columnWidthRatio="1"
+														 displayName="Despesa" fills="[0xcc3300]" 
+														 filters="[]" showDataEffect="{char}" xField="MONTH"
+														 yField="SAFE_OUT"/>
+										<!-- mx:ColumnSeries width="5" height="5" columnWidthRatio=".1"
+										displayName="Balanço" fills="[0x333333]"
+										filters="[]" showDataEffect="{char}" xField="MONTH"
+										yField="SAFE_TOTAL"/ -->
+										<mx:ColumnSeries width="35" height="5" columnWidthRatio=".1"
+														 displayName="Saldo Contas do Mês"
+														 fills="[0xaaaaaa]" filters="[]"
+														 showDataEffect="{char}" xField="MONTH"
+														 yField="ACCOUNT_TOTAL"/>
+										<!-- fills="[0x3366ff]" -->
+									</mx:series>
+									<mx:seriesFilters>
+										<mx:DropShadowFilter alpha=".0" distance="0"/>
+									</mx:seriesFilters>
+								</mx:ColumnChart>
+								
+								
+							</s:VGroup>
+							
+						</s:Group>
+						
+						
+						
+						<s:Group width="100%" height="100%">
+							
+							<elements:elementPanelSimple 
+								title="LANÇAMENTOS" titleAlign="left"
+								backgroundColor="0xffffff" backgroundColorTitle="0xf9f9f9" titleColor="0x777777" />
+							
+							<s:VGroup id="groupList_" width="100%" height="100%" paddingLeft="10" paddingBottom="15" paddingTop="40" paddingRight="10">
+								
+								
+								
+								<!-- s:Group width="100%" height="100%">
+								<s:Button width="100%" height="30" label="Ontem"
+								icon="{gnncEmbedBlackWhite.bw_calendar_16}"/>
+								<s:Button width="100%" height="30" label="Hoje"
+								icon="{gnncEmbedBlackWhite.bw_calendar_16_today}"/>
+								<s:Button width="100%" height="30" label="Amanhã"
+								icon="{gnncEmbedBlackWhite.bw_calendar_16}"/>
+								<s:Button width="100%" height="30" label="Semana"
+								icon="{gnncEmbedBlackWhite.bw_calendar_16}"/>
+								<s:Button width="100%" height="30" label="Pendências"
+								icon="{gnncEmbedBlackWhite.bw_urgent_16}"/>
+								
+								
+								</s:Group -->
+								
+								<s:List id="safeFinancialList_" width="100%" height="100%" borderVisible="false"
+										contentBackgroundAlpha="0"
+										dataProvider="{new ArrayCollection()}"
+										horizontalScrollPolicy="off"
+										itemRenderer="GNNC.modules.financial.itemRender.itemRender_financial_clean_forList">
+									<s:layout>
+										<s:VerticalLayout gap="0" rowHeight="25"/>
+									</s:layout>
+								</s:List>
+								
+							</s:VGroup>
+						</s:Group>
+
+					</s:VGroup>
+					
+					
+					
+					
+					
+					
+					
+					
+					<s:VGroup width="190" height="100%" gap="3">
+						
+						
+						<!-- group:groupFinancialHomeItem _label="Dinheiro" _rows="0"
+						_source="{gnncEmbedBlackWhite.bw_financial_16_type_money}"/>
+						<group:groupFinancialHomeItem _label="Cart. de Débito" _rows="0"
+						_source="{gnncEmbedBlackWhite.bw_financial_16_type_creditcard}"/>
+						<group:groupFinancialHomeItem _label="Cart. de Crédito" _rows="0"
+						_source="{gnncEmbedBlackWhite.bw_financial_16_type_creditcard}"/>
+						<group:groupFinancialHomeItem _label="Boleto" _rows="0"
+						_source="{gnncEmbedBlackWhite.bw_financial_16_type_boleto}"/ -->
+						<!-- group:groupFinancialHomeItem _label="Mensalidades" 		_rows="0" _source="{gnncEmbedBlackWhite.bw_course_16}" /-->
+						<!-- group:groupFinancialHomeItem _label="Metas"			_rows="0" _source="{gnncEmbedBlackWhite.bw_chart_16}" /-->
+						
+						
+						<group:groupFinancialHomeItem _label="Pendências" _rows="0"
+													  toolTip="Lançamentos sinalizados como Pendência\nSomente receitas"
+													  _source="{gnncEmbedBlackWhite.check_16_yellow_ok}"
+													  _color="0x2da899"
+													  />
+						<group:groupFinancialHomeItem _label="Taxas Receitas" _rows="0"
+													  toolTip="Taxas Receitas"
+													  _source="{gnncEmbedBlackWhite.bw_financial_16_safe_connection}"
+													  _color="0x2da899"
+													  />
+						<group:groupFinancialHomeItem _label="Taxas Despesas" _rows="0"
+													  toolTip="Taxas Despesas"
+													  _source="{gnncEmbedBlackWhite.bw_financial_16_safe_connection}"
+													  _color="0xcc3300"
+													  _valueSafe="0"
+													  />
+						<group:groupFinancialHomeItem _label="Juros Recebido" _rows="0"
+													  toolTip="Juros Recebido (Receita)"
+													  _source="{gnncEmbedBlackWhite.bw_financial_16_safe_in}"
+													  _color="0x2da899"
+													  _valueSafe="0"
+													  />
+						<group:groupFinancialHomeItem _label="Juros Pago" _rows="0"
+													  toolTip="Juros Pago (Despesa)"
+													  _source="{gnncEmbedBlackWhite.bw_financial_16_safe_out}"
+													  _color="0xcc3300" 
+													  _valueSafe="0"
+													  />
+						<group:groupFinancialHomeItem _label="Desconto Obtido" _rows="0"
+													  toolTip="Economia com descontos"
+													  _source="{gnncEmbedBlackWhite.bw_financial_16_safe}"
+													  _color="0x2da899"
+													  _valueSafe="0"
+													  />
+						<group:groupFinancialHomeItem _label="Desconto Dado" _rows="0"
+													  toolTip="Perda com descontos"
+													  _source="{gnncEmbedBlackWhite.bw_financial_16_safe}"
+													  _color="0xcc3300" 
+													  _valueSafe="0"
+													  />
+						
+						<s:Rect height="100%"/>
+						
+						<s:Group width="190" height="195">
+							<s:Rect width="190" height="190" radiusX="5" fill="{new SolidColor(0xffffff)}"/>
+							<s:Group width="180" height="180" horizontalCenter="0">
+								<mx:DateChooser id="CALENDAR_" width="180" height="180" horizontalCenter="0"
+												allowDisjointSelection="false"
+												borderColor="0xAAAAAA" borderVisible="false"
+												change="{__financialList(CALENDAR_.selectedDate)}"
+												firstDayOfWeek="0" fontSize="11" showToday="true"
+												textAlign="center" yearNavigationEnabled="true"/>
+								<elements:elementHLine width="180" horizontalCenter="0" _COLOR="0xeeeeee" top="30"/>
+							</s:Group>
+						</s:Group>
+						
+						
+					</s:VGroup>
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+				
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+				</s:HGroup>
+			</s:Scroller>
+		</s:VGroup>
+	</s:HGroup>
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+
+	
+	
+	
+	
+</s:Module>

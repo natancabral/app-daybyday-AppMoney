@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		  xmlns:financial="GNNC.modules.financial.*" xmlns:stage="GNNC.elements.stage.*" xmlns:elements="GNNC.UI.elements.*"
+		  >
+	
+	<elements:elementBarStatus width="100%" height="100%" alpha=".7"/>
+	
+	<s:Group width="100%" height="30">
+		<elements:elementBarStatus/>
+		<s:TabBar height="30" dataProvider="{panelLeft_}" fontWeight="normal"
+				  skinClass="GNNC.skin.tabBar.skin_tabBar_forMenu"/>
+	</s:Group>
+	
+	<mx:ViewStack id="panelLeft_" top="30" bottom="0" width="100%">
+		<s:NavigatorContent width="100%" height="100%" label="EQUILIBRAR">
+			<financial:moduleFinancialGroup_stageManipulation />
+		</s:NavigatorContent>
+		<!-- s:NavigatorContent width="100%" height="100%" label="PREVISÃO">
+			
+		</s:NavigatorContent -->
+	</mx:ViewStack>
+	
+</s:Module>

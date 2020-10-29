@@ -1,0 +1,423 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  
+		  width="590" height="410" 
+		  creationComplete="{__start()}" 
+		  
+		  xmlns:stage="GNNC.elements.stage.*" 
+		  xmlns:component="GNNC.elements.component.*" 
+		  xmlns:gnncDateField4="GNNC.UI.gnncDateField4.*" 
+		  xmlns:select="GNNC.elements.component.select.*" xmlns:elements="GNNC.UI.elements.*"
+		  >
+	<fx:Declarations>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import GNNC.UI.gnncAlert.gnncAlert;
+			import GNNC.UI.gnncPopUp.gnncPopUp;
+			import GNNC.data.conn.gnncAMFPhp;
+			import GNNC.data.data.gnncDataArray;
+			import GNNC.data.data.gnncDataNumber;
+			import GNNC.data.data.gnncDataRand;
+			import GNNC.data.date.gnncDate;
+			import GNNC.data.globals.gnncGlobalLog;
+			import GNNC.data.globals.gnncGlobalStatic;
+			import GNNC.data.sql.gnncSql;
+			import GNNC.daybyday.money.gnncMoneyFinancialAccount;
+			import GNNC.event.gnncCloseEvent;
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.keyboard.gnncKeyboard;
+			import GNNC.modules.financial.formView.viewFinancial;
+			import GNNC.sqlTables.table_financial;
+			
+			import mx.collections.ArrayCollection;
+			
+			[Bindable] private var _gnncGlobal:gnncGlobalStatic = new gnncGlobalStatic(true);
+			public var dataProvider:ArrayCollection = new ArrayCollection();
+			
+			public var _change:Boolean = false;
+			public var _tableFinancial:table_financial = new table_financial();
+			
+			private var _idsAll:Array = new Array();
+			private var _idsList:Array = new Array();
+			private var _idsReferenceList:Array = new Array();
+			
+			private var _gnncPopUp:gnncPopUp = new gnncPopUp();
+			private var _gnncFinancial:gnncAMFPhp = new gnncAMFPhp(); 
+			
+			private function __start():void
+			{
+				this.addEventListener(KeyboardEvent.KEY_UP,
+					function(event:KeyboardEvent):void
+					{
+						if(gnncKeyboard.__ENTER(event))
+						{
+							focusManager.getNextFocusManagerComponent().setFocus();
+							focusManager.getNextFocusManagerComponent().drawFocus(true);
+							
+							focusManager.showFocus();
+							focusManager.getFocus();
+							focusManager.activate();
+						}
+						//if(gnncKeyboard.__CONTROL_ENTER(event)) __select();
+					}
+				);
+				
+				callLater(__setConfig);
+				callLater(__firstInput);
+			}
+			
+			public function __setConfig():void 
+			{ 
+				financial_.dataProvider = dataProvider;
+				
+				var reversal:Boolean  = true;
+				
+				var haveSafeFinal:Boolean     = false; //se tem lançamentos baixados/faturados
+				var haveSafeOpen:Boolean      = false; //
+				var haveSafeCanceled:Boolean  = false; //
+				var haveSafeReversal:Boolean  = false; //
+				var haveSafeTrans:Boolean     = false; //
+				
+				var valueIsZero:Boolean = false;
+				
+				var totalIn:Number = 0;
+				var totalOut:Number = 0;
+				var obj:Object = new Object();
+				var len:uint = dataProvider.length;
+				
+				for(var i:uint=0;i<len;i++)
+				{
+					obj = dataProvider.getItemAt(i);
+
+					//IDs
+					_idsList.push(obj.ID);
+					if(String(obj.IDS_REFERENCE).length>0)
+						_idsReferenceList = _idsReferenceList.concat(String(obj.IDS_REFERENCE).split(','));
+					
+					if(gnncDate.__isNull(obj.DATE_FINAL))
+						reversal = false;
+					
+					if(Number(obj.VALUE_IN)>0)
+						totalIn  += Number(obj.VALUE_IN_PAY) >0 ? Number(obj.VALUE_IN_PAY)  : Number(obj.VALUE_FINAL) ;
+					else if(Number(obj.VALUE_OUT)>0)
+						totalOut += Number(obj.VALUE_OUT_PAY)>0 ? Number(obj.VALUE_OUT_PAY) : Number(obj.VALUE_FINAL) ;
+
+					if(gnncDate.__isValid(obj.DATE_FINAL) && gnncDate.__isNull(obj.DATE_CANCELED))
+						haveSafeFinal = true;
+					if(gnncDate.__isNull(obj.DATE_FINAL ) && gnncDate.__isNull(obj.DATE_CANCELED))
+						haveSafeOpen = true;
+					if(gnncDate.__isValid(obj.DATE_CANCELED))
+						haveSafeCanceled = true;
+
+					if(Number(obj.IS_REVERSAL)==1)
+						haveSafeReversal = true;
+					if(String(obj.MIX)=='FINANCIAL_TRANS')
+						haveSafeTrans = true;
+				}
+
+				if(gnncDataNumber.__safeClear(totalIn) == 0 && gnncDataNumber.__safeClear(totalOut) == 0)
+					valueIsZero = true;
+
+				if(totalIn > 0 && totalOut > 0){
+					reversal = false;
+					alert_.text = 'Receita e despesa não podem ser estornados juntos.';
+				}
+				else if(haveSafeCanceled){
+					reversal = false;
+					alert_.text = 'Lançamentos cancelados não serão estornados.';
+				} 
+				else if(haveSafeOpen){
+					reversal = false;
+					alert_.text = 'Lançamentos não baixados (faturados) não podem ser estornados.';
+				}
+				else if(haveSafeReversal){
+					reversal = false;
+					alert_.text = 'Na listagem já contém um lançamento estornado.';
+				}
+				else if(valueIsZero){
+					reversal = false;
+					alert_.text = 'É impossível estornar um valor próximo ou igual a zero (0,00).';
+				}
+				else if(haveSafeTrans){
+					reversal = false;
+					alert_.text = 'É impossível estornar uma transferência.';
+				}
+				
+				//sIn_.value = totalIn;
+				//sIn_.label = 
+				VI_.text = gnncDataNumber.__safeReal(totalIn);
+				//sIn_.enabled = totalIn > 0 ? true : false;
+				
+				//sOut_.value = totalOut;
+				//sOut_.label = 
+				VO_.text = gnncDataNumber.__safeReal(totalOut);
+				//sOut_.enabled = totalOut > 0 ? true : false;
+
+				
+				gnncGlobalLog.__add('_idsList1:'+_idsList.join(','));
+				gnncGlobalLog.__add('_idsReferenceList1:'+_idsReferenceList.join(','));
+				
+				//VS_.text = '=';
+				//new gnncDataArrayCollection().__sort
+				_idsList          = _idsList.length          == 0 ? new Array() : _idsList.sort(Array.NUMERIC) ;
+				_idsReferenceList = _idsReferenceList.length == 0 ? new Array() : _idsReferenceList.sort(Array.NUMERIC);
+
+				gnncGlobalLog.__add('_idsList2:'+_idsList.join(','));
+				gnncGlobalLog.__add('_idsReferenceList2:'+_idsReferenceList.join(','));
+
+				_idsAll = _idsAll.concat(_idsList,_idsReferenceList);
+				gnncGlobalLog.__add('_idsAll3:'+_idsAll.join(','));
+				_idsAll = gnncDataArray.merge([_idsList,_idsReferenceList],true);
+				gnncGlobalLog.__add('_idsAll4:'+_idsAll.join(','));
+
+				gnncGlobalLog.__add('_idsList3:'+_idsList.join(','));
+				gnncGlobalLog.__add('_idsReferenceList3:'+_idsReferenceList.join(','));
+
+				_idsReferenceList = gnncDataArray.__removeDuplicates(_idsReferenceList);
+
+				gnncGlobalLog.__add('_idsReferenceList3:'+_idsReferenceList.join(','));
+
+				btnReversal_.enabled = reversal;
+				
+			}
+			
+			public function __firstInput():void 
+			{ 
+			}
+			
+			private function __close():void
+			{
+				new gnncPopUp().__close(this);
+			}
+			
+			private function __newFinancial():void
+			{
+				var t:table_financial = new table_financial();
+				t.IDS_REFERENCE       = _idsAll.join(',');
+				//t.ID_FATHER           = uint(_idsList[0]);
+				
+				gnncGlobalLog.__add('_idsAll'+_idsAll.join(','));
+				gnncGlobalLog.__add('_idsReferenceList'+_idsReferenceList.join(','));
+
+				gnncAlert.__alert("Deseja <b>estornar</b> este(s) lançamento(s)?",'Estorno',__reversal,[gnncAlert.YES,gnncAlert.CANCEL]);
+			
+			}
+
+			private function __reversal(e:gnncCloseEvent):void
+			{
+				if(e.detail != gnncAlert.YES)
+					return;
+				
+				this.visible = false;
+				btnReversal_.enabled = false;
+				
+				if(financial_.dataProvider.length == 1)
+				{
+					_gnncPopUp.__close(); 
+					_gnncPopUp.__loading('Recolhendo dados...');
+					var _sql:String = "" +
+					" select * from dbd_financial where ID = "+_idsList[0];
+					
+					_gnncFinancial.__clear();
+					_gnncFinancial.__sql(_sql,'','',__fResult,__fFault);
+
+					function __fResult(e:*=null):void
+					{
+						//new gnncAlert().__dataGrid(_gnncFinancial.DATA_ARR);
+						
+						if(_gnncFinancial.DATA_ROWS==0)
+							return;
+						
+						var valueIn:Number     = 0;
+						var valueOut:Number    = 0;
+						var valueInPay:Number  = 0;
+						var valueOutPay:Number = 0;
+						var idFinancial:uint   = 0;
+						var safeIn:Boolean     = false;
+						
+						var obj:Object       = _gnncFinancial.DATA_ARR.getItemAt(0);
+
+						_tableFinancial.ID_KEY = _tableFinancial.ID_KEY ? _tableFinancial.ID_KEY : gnncDataRand.__key();
+
+						if(Number(obj.IS_REVERSAL)===Number(1)){
+							gnncAlert.__alert('Este lançamento financeiro <b>já está estornado</b>.');
+							return;
+						}
+						if(String(obj.MIX)==='FINANCIAL_TRANS'){
+							gnncAlert.__alert('Este lançamento financeiro <b>é uma transferências</b>, não pode ser estornado.');
+							return;
+						}
+						
+						idFinancial          = obj.ID;
+
+						obj._TABLE           = 'FINANCIAL';
+						obj.ID               = null;
+						obj.NUMBER_FINAL_PAY = null;
+						obj.ID_KEY           = _tableFinancial.ID_KEY;
+						obj.DATE_FINAL       = gnncDate.__date2String(new Date(),false);
+						obj.DATE_END         = gnncDate.__date2String(new Date(),false);
+						
+						//força transferências estornadas serem lançamento financeiro padrão
+						obj.MIX = 'FINANCIAL';
+						
+						if(dataProvider.length==1)
+							obj.IDS_REFERENCE    = _idsList.join(',');
+						else if(dataProvider.length>1)
+							obj.IDS_REFERENCE    = _idsAll.join(',');
+						
+						obj.IS_REVERSAL      = 1;
+						obj.DESCRIPTION      = '[Estorno] '+obj.DESCRIPTION;
+						
+						valueIn             = Number(obj.VALUE_IN);
+						valueInPay          = Number(obj.VALUE_IN_PAY);
+						valueOut            = Number(obj.VALUE_OUT);
+						valueOutPay         = Number(obj.VALUE_OUT_PAY);
+						
+						if(valueInPay>0 && valueOutPay==0)
+							safeIn = true;
+
+						obj.VALUE_IN      = valueOut;
+						obj.VALUE_IN_PAY  = valueOutPay;
+						obj.VALUE_OUT     = valueIn;
+						obj.VALUE_OUT_PAY = valueInPay;
+						
+						_sql = new gnncSql().__INSERT(obj,false,false,false);
+						_sql += 
+							
+							gnncGlobalStatic._breakSql + 
+							" LOCK TABLES dbd_financial WRITE,dbd_financial a WRITE,dbd_financial b READ " + 
+							gnncGlobalStatic._breakSql + 
+							" UPDATE dbd_financial a " +
+							" JOIN (SELECT MAX(NUMBER_FINAL_PAY) AS NUMBER_NEW FROM dbd_financial where "+(safeIn?'VALUE_IN':'VALUE_OUT')+" > 0 limit 1) b " +
+							" SET a.NUMBER_FINAL_PAY = if(b.NUMBER_NEW<10000,10001,b.NUMBER_NEW+1) where a.ID_KEY = '"+obj.ID_KEY+"' "+
+							gnncGlobalStatic._breakSql + 
+							" UPDATE dbd_financial a SET a.IS_REVERSAL = 1 where a.ID IN ("+idFinancial+") "+ 
+							gnncGlobalStatic._breakSql + 
+							" UNLOCK TABLES ";
+							
+						//new gnncAlert().__alert(_sql+':sql','sql');
+
+						_gnncFinancial.__clear();
+						_gnncFinancial.__sql(_sql,'','',__fResult2,__fFault2);
+
+						function __fResult2(e:*=null):void
+						{
+							_change = true;
+							//btnReversal_.enabled = true;
+							_gnncPopUp.__close();
+							__close();
+
+							new gnncMoneyFinancialAccount().updateDataReversal(obj.ID_FINANCIAL_ACCOUNT,safeIn, ( safeIn == true ? VI_.text : VO_.text ) );
+
+							/*var value:Number = gnncDataNumber.__safeClear( safeIn == true ? VI_.text : VO_.text );
+
+							// ---------- ATUALIZA O SALDO DAS CONTAS
+							// ---------- Atenção, essa linha debaixo serve somente para REVERSAL, ou estorno.
+							var getIdAccount:uint = obj.ID_FINANCIAL_ACCOUNT;
+							var o:Object  = new gnncDataArrayCollection().__filterNumeric(_gnncGlobal._FINANCIAL_ACCOUNT.DATA_ARR,'ID',getIdAccount);
+							o = o.getItemAt(0);
+							var index:int = _gnncGlobal._FINANCIAL_ACCOUNT.DATA_ARR.getItemIndex(o);
+							// ---------- Atenção, essa linha debaixo serve somente para REVERSAL, ou estorno.
+							_gnncGlobal._FINANCIAL_ACCOUNT.DATA_ARR.getItemAt(index).VALUE_ACCOUNT = Number(o.VALUE_ACCOUNT) + ((safeIn?-1:1) * value ); //
+							_gnncGlobal._FINANCIAL_ACCOUNT.DATA_ARR.refresh();*/
+							
+						}
+						function __fFault2(e:*=null):void
+						{
+							_change = false;
+							this.visible = true;
+							btnReversal_.enabled = true;
+							_gnncPopUp.__close();
+						}
+						
+					}
+					function __fFault(e:*=null):void
+					{
+						_change = false;
+						this.visible = true;
+						btnReversal_.enabled = true;
+					}
+				}
+				else 
+				{
+					new gnncAlert().__alert('Infelizmente o recurso de <b>múltiplos estornos</b> está desabilitado.');
+					this.visible = true;
+					btnReversal_.enabled = false;
+					_gnncPopUp.__close();
+				}
+
+			}
+
+			private function __financialView():void
+			{
+				var obj:Object = financial_.selectedItem;
+				var idx:int    = financial_.selectedIndex;
+
+				if(idx<0){
+					gnncAlert.__alert('Selecione um lançamento na listagem.');
+					return;
+				}
+
+				var page:viewFinancial 	    = new viewFinancial();
+				page._tableFinancial  		= new table_financial(obj.ID);
+				new gnncPopUp().__creation	(page,true,false);
+			}
+			
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<s:RadioButtonGroup id="valueFinal_" />
+	</fx:Declarations>
+	
+	<elements:elementStageBoxPopUp />
+	<elements:elementLabelFont id="titlePopUp_" text="ESTORNO" fontSize="9" fontWeight="normal" left="1" top="6" right="1" textAlign="center" color="0x555555"/>
+	
+	<s:HGroup left="20" right="20" top="20" height="30" verticalAlign="middle" paddingRight="5">
+		<s:TabBar id="panelTop_" dataProvider="{panelCenter_}" height="30" focusEnabled="false" />
+		<s:Rect width="100%"/>
+	</s:HGroup>
+
+	<mx:ViewStack id="panelCenter_" left="20" right="20" top="55" bottom="42">
+		<s:NavigatorContent label="BÁSICO" width="100%" height="100%">
+			<s:layout>
+				<s:VerticalLayout paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10" gap="10" />
+			</s:layout>
+			
+				<s:List id="financial_" dataProvider="{new ArrayCollection()}" width="100%" height="100%" horizontalScrollPolicy="off"
+						allowMultipleSelection="false" itemRenderer="GNNC.modules.financial.itemRender.itemRender_financial_forList"
+						creationComplete="{financial_.dataProvider = dataProvider}"
+						>
+					<s:layout>
+						<s:VerticalLayout rowHeight="25" gap="0"/>
+					</s:layout>
+				</s:List>
+				
+			<s:Label id="alert_" height="20" text="Nenhuma incompatibilidade encontrada." fontWeight="bold" verticalAlign="top"/>
+
+		</s:NavigatorContent>
+
+	</mx:ViewStack>
+
+	<s:HGroup left="3" right="1" bottom="1" height="34" gap="2" paddingLeft="5" paddingRight="5" verticalAlign="middle">
+
+		<s:Label width="20" text="Σ" textAlign="center" fontWeight="bold"/>
+		<s:Label id="VI_" width="90" color="0x009900" fontSize="12" text="" textAlign="center" fontWeight="bold" maxDisplayedLines="1" showTruncationTip="true" />
+		<s:Label id="VO_" width="90" color="0xcc0000" fontSize="12" text="" textAlign="center" fontWeight="bold" maxDisplayedLines="1" showTruncationTip="true" />
+
+		<s:Rect width="100%"/>
+		
+		<!-- s:Rect width="100%" / -->
+		<s:Button height="25" label="Visualizar" icon="{gnncEmbedBlackWhite.bw_view_16}" fontWeight="normal" click="{__financialView()}" />
+		<s:Button height="25" label="Estornar" icon="{gnncEmbedBlackWhite.bw_financial_16_safe_reversal}" fontWeight="bold" id="btnReversal_" click="{__newFinancial()}" enabled="false"/>
+		<s:Button icon="{gnncEmbedBlackWhite.app_close_16_clean}" label="Fechar" click="{__close()}" height="25" skinClass="GNNC.skin.button.skin_buttonLink" />	
+	</s:HGroup>
+
+	<s:Button top="4" right="4" click="{__close()}" width="10" height="10" tabFocusEnabled="false" toolTip="Fechar" />
+
+</s:Module>

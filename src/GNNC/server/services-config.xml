@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services-config>
+	<services>
+	
+		<!-- //##################################### -->
+		<!-- level local server in Web -->
+		<service id="amfphp-flashremoting-service-localinserver-level1" class="flex.messaging.services.RemotingService"
+			messageTypes="flex.messaging.messages.RemotingMessage">
+			<destination id="webServer-level1">
+				<channels>
+					<channel ref="my-amfphp-webServer-level1" />
+				</channels>
+				<properties>
+					<source>*</source>
+				</properties>
+			</destination>
+		</service>
+		<service id="amfphp-flashremoting-service-localinserver-level2" class="flex.messaging.services.RemotingService"
+			messageTypes="flex.messaging.messages.RemotingMessage">
+			<destination id="webServer-level2">
+				<channels>
+					<channel ref="my-amfphp-webServer-level2" />
+				</channels>
+				<properties>
+					<source>*</source>
+				</properties>
+			</destination>
+		</service>
+		<!-- //##################################### -->
+	
+		<!-- //##################################### -->
+		<!-- http:// gNial and GNNC Serves -->
+		<service id="amfphp-flashremoting-service-server" class="flex.messaging.services.RemotingService"
+			messageTypes="flex.messaging.messages.RemotingMessage">
+			<destination id="gnialServer">
+				<channels>
+					<channel ref="my-amfphp-gnialServer" />
+				</channels>
+				<properties>
+					<source>*</source>
+				</properties>
+			</destination>
+		</service>
+		<service id="amfphp-flashremoting-service-gnnc" class="flex.messaging.services.RemotingService"
+			messageTypes="flex.messaging.messages.RemotingMessage">
+			<destination id="gnncServer">
+				<channels>
+					<channel ref="my-amfphp-gnncServer" />
+				</channels>
+				<properties>
+					<source>*</source>
+				</properties>
+			</destination>
+		</service>
+		<!-- //##################################### -->
+	
+		<!-- //##################################### -->
+		<!-- http:// localhost -->
+		<service id="amfphp-flashremoting-service-localhost" class="flex.messaging.services.RemotingService"
+			messageTypes="flex.messaging.messages.RemotingMessage">
+			<destination id="localhost1">
+				<channels>
+					<channel ref="my-amfphp-localServer1" />
+				</channels>
+				<properties>
+					<source>*</source>
+				</properties>
+			</destination>
+		</service>
+		<service id="amfphp-flashremoting-service-localhost2" class="flex.messaging.services.RemotingService"
+			messageTypes="flex.messaging.messages.RemotingMessage">
+			<destination id="localhost2">
+				<channels>
+					<channel ref="my-amfphp-localServer2" />
+				</channels>
+				<properties>
+					<source>*</source>
+				</properties>
+			</destination>
+		</service>
+		<!-- //##################################### -->
+
+		<!-- //##################################### -->
+		<!-- http:// local server -->
+		<service id="amfphp-flashremoting-service-localserver-99" class="flex.messaging.services.RemotingService"
+			messageTypes="flex.messaging.messages.RemotingMessage">
+			<destination id="localserver99">
+				<channels>
+					<channel ref="my-amfphp-localserver-99" />
+				</channels>
+				<properties>
+					<source>*</source>
+				</properties>
+			</destination>
+		</service>
+		<!-- //##################################### -->
+
+
+	</services>
+	<channels>
+		<!-- //##################################### -->
+		<!-- level local server in Web -->
+		<channel-definition id="my-amfphp-webServer-level1"							class="mx.messaging.channels.AMFChannel">
+			<endpoint uri="../daybyday/gateway.php"									class="flex.messaging.endpoints.AMFEndpoint" />
+		</channel-definition>
+		<channel-definition id="my-amfphp-webServer-level2"							class="mx.messaging.channels.AMFChannel">
+			<endpoint uri="../../daybyday/gateway.php"								class="flex.messaging.endpoints.AMFEndpoint" />
+		</channel-definition>
+		<!-- //##################################### -->
+		
+		<!-- //##################################### -->
+		<!-- http:// gNial and GNNC Serves -->
+		<channel-definition id="my-amfphp-gnialServer"								class="mx.messaging.channels.AMFChannel">
+			<endpoint uri="https://daybyday.gnial.com.br/gateway.php"				class="flex.messaging.endpoints.AMFEndpoint" />
+		</channel-definition>
+		<channel-definition id="my-amfphp-gnncServer" 								class="mx.messaging.channels.AMFChannel">
+			<endpoint uri="https://daybyday.gnnc.com.br/gateway.php" 				class="flex.messaging.endpoints.AMFEndpoint" />
+		</channel-definition>
+		<!-- //##################################### -->
+		
+		<!-- //##################################### -->
+		<!-- http:// localhost -->
+		<channel-definition id="my-amfphp-localServer1"								class="mx.messaging.channels.AMFChannel">
+			<endpoint uri="http://localhost/daybyday/gateway.php"					class="flex.messaging.endpoints.AMFEndpoint" />
+		</channel-definition>
+		<channel-definition id="my-amfphp-localServer2"								class="mx.messaging.channels.AMFChannel">
+			<endpoint uri="http://localhost/daybyday2/Core/Gateway.php"				class="flex.messaging.endpoints.AMFEndpoint" />
+		</channel-definition>
+		<!-- //##################################### -->
+
+		<!-- //##################################### -->
+		<!-- http:// local server -->
+		<channel-definition id="my-amfphp-localserver-99"							class="mx.messaging.channels.AMFChannel">
+			<endpoint uri="http://192.168.1.99/daybyday/gateway.php"				class="flex.messaging.endpoints.AMFEndpoint" />
+		</channel-definition>
+		<!-- //##################################### -->
+		
+	</channels>
+</services-config>

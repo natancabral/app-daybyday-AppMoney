@@ -1,0 +1,1150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  width="100%" height="100%" 
+		  creationComplete="{__start()}" 
+		  xmlns:gnncDateButton="GNNC.UI.gnncDateButton.*"
+		  xmlns:elements="GNNC.UI.elements.*" 
+		  xmlns:select="GNNC.elements.component.select.*" 
+		  xmlns:component="GNNC.elements.component.*" 
+		  xmlns:stage="GNNC.elements.stage.*"
+		  >
+	
+	<fx:Script>
+		<![CDATA[
+			import GNNC.UI.gnncAlert.gnncAlert;
+			import GNNC.UI.gnncNotification.gnncNotification;
+			import GNNC.UI.gnncPopUp.gnncPopUp;
+			import GNNC.data.conn.gnncAMFPhp;
+			import GNNC.data.data.gnncData;
+			import GNNC.data.data.gnncDataArrayCollection;
+			import GNNC.data.data.gnncDataBindable;
+			import GNNC.data.data.gnncDataHtml;
+			import GNNC.data.data.gnncDataNumber;
+			import GNNC.data.data.gnncDataObject;
+			import GNNC.data.data.gnncDataRand;
+			import GNNC.data.data.json.gnncJSON;
+			import GNNC.data.date.DateUtils;
+			import GNNC.data.date.gnncDate;
+			import GNNC.data.file.gnncFilesRemote;
+			import GNNC.data.globals.gnncGlobalArrays;
+			import GNNC.data.globals.gnncGlobalLog;
+			import GNNC.data.globals.gnncGlobalStatic;
+			import GNNC.data.mailer.gnncMailer;
+			import GNNC.data.permission.gnncPermission;
+			import GNNC.event.gnncCloseEvent;
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.gnncEmbedImage;
+			import GNNC.modules.client.formNew.newClient;
+			import GNNC.modules.course.formNew.selectCourse;
+			import GNNC.others.gnncUrlNavegator;
+			import GNNC.skin.button.skin_button;
+			import GNNC.skin.button.skin_buttonBlue;
+			import GNNC.sqlTables.table_client;
+			import GNNC.sqlTables.table_data_json;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.HTML;
+			import mx.core.mx_internal;
+			
+			private var _tableDataJson:table_data_json= new table_data_json();
+			
+			private var connFinancialRecovery:gnncAMFPhp = new gnncAMFPhp();
+			private var connExec:gnncAMFPhp = new gnncAMFPhp();
+			
+			private var mainObject:Object = new Object();
+			
+			private const _today:Date 	  = new Date(); 
+			private var _month:uint 	  = new Date().month; 	//JAN --> 0
+			private var _year:uint 		  = new Date().fullYear; 	//2012
+			
+			//accounts
+			private var _AllAccounts:Boolean 	 = true;//false;
+			private var _idAccount:uint 		 = 0;
+			private var _nameAccount:String 	 = '';
+			//vourses
+			private var idCourse:uint = 0;
+			
+			private function __start():void
+			{
+				__config();
+				__changeMonth(_month,false,_year);
+				gnncDataBindable.__loginSession(permission);
+				
+				//return;
+				
+				var content:String = '' +
+					
+					"<b>Prezado(a), {{NAME_CLIENT}},</b>\n\n" +
+					"Estamos enviando este e-mail para informá-lo(a) da fatura gerada em <b>{{TODAY}}</b>, " +
+					"que já pode ser paga através do boleto anexado, ou depósito bancário.\n\n" +
+					
+					"A fatura gerada pode ser paga em qualquer agência bancária ou lotérica até a data de vencimento. " +
+					"Após o vencimento os valores podem sofrer reajustes e multa.\n\n" +
+					
+					"{{NAME_COURSE}}" +
+					
+					"Atenciosamente, \n" +
+					"<b>Departamento Financeiro</b>";
+				
+				emailClientMessage_.text = content;
+				emailSubject_.text = 'Fatura de Pagamento';
+				
+			}
+			
+			private function permission(e:*=null):void
+			{
+				gnncPermission.__blockModule(this,'module-financial-recovery',true,true);
+			}
+			
+			private function __config():void
+			{
+				/*addEventListener(KeyboardEvent.KEY_UP,
+				function(event:KeyboardEvent):void
+				{
+				//if(gnncKeyboard.__CONTROL(event)) BTN_FINAL_.setFocus();
+				if(gnncKeyboard.__ENTER(event))
+				{
+				focusManager.getNextFocusManagerComponent().setFocus();
+				focusManager.getNextFocusManagerComponent().drawFocus(true);
+				
+				focusManager.showFocus();
+				focusManager.getFocus();
+				focusManager.activate();
+				}
+				},false,0
+				)*/
+			}
+			
+			private function __changeMonth(month_:uint,refresh_:Boolean=false,year_:uint=0):void
+			{
+				_month = month_;
+				MONTH_TXT_.text = gnncGlobalArrays._MONTH.getItemAt(month_).NICK_NAME.toString().toUpperCase();
+				YEAR_TXT_.text 	= year_.toString().substr(2,2);
+				if(gnncGlobalStatic._userId && refresh_){
+					//__financialRefresh();
+				}
+			}
+			
+			private function __changeMonthPrev():void
+			{
+				if(_month > 0){
+					_month--;
+				}else{
+					_month = 11;
+					_year--;
+				}
+				__changeMonth(_month,false,_year);
+			}
+			
+			private function __changeMonthNext():void
+			{
+				if(_month < 11){
+					_month++;
+				}else{
+					_month = 0;
+					_year++;
+				}
+				__changeMonth(_month,false,_year);
+			}
+			
+			private function __listX(x:uint):void
+			{
+				var sql:String = "select * from dbd_data_json where ID > 0 ";
+				
+				connFinancialRecovery = new gnncAMFPhp();
+				connFinancialRecovery.__sql(sql,'','',fResult,fFault);
+				
+				function fResult(event:*):void{
+					
+					if(connFinancialRecovery.DATA_ROWS < 1)
+						return;
+					
+					gnncGlobalLog.__add('...');
+					
+					var j:Object = connFinancialRecovery.DATA_ARR.getItemAt(0);
+					var o:Object = new Object();
+					
+					if(x==1){
+						new gnncAlert().__alert(gnncDataObject.__getPropertysNamesAMFPhp(j).toString(),'1');
+						new gnncAlert().__alert(gnncDataObject.__getPropertysNames(j).toString(),'2');
+						new gnncAlert().__alert(gnncJSON.toString(j),'3');
+					}
+					
+					if(gnncJSON.isValid(j.DATA))
+						o = gnncJSON.decode(j.DATA)[0];
+					
+					o['times']    = '0'; //vezes tentando enviar
+					o['level']    = '3'; //prioridade (1 hight 3 low)
+					o['attach']   = 'attach1,attach2';
+					o['idAttach'] = '00001,00002';
+					
+					o['title']    = '1';
+					o['inputs']   = '2';
+					o['content']  = '3';
+					
+					mainObject = gnncData.__clone(o);
+					
+					var a:ArrayCollection = new ArrayCollection();
+					a.addItem(mainObject);
+					list_.dataProvider = a;					
+				}
+				
+				function fFault(event:*):void{ 
+				}
+				
+			}
+			
+			private function __save(x:uint):void
+			{
+				var s:String = gnncJSON.escape(jsonText_.text);
+				s = s.split(' 00:00:00').join('');
+				
+				//var sql:String  = "update dbd_data_json set DATA = '"+gnncJSON.escape(gnncJSON.encode(mainObject))+"' where ID = "+connFinancialRecovery.DATA_ARR.getItemAt(0).ID+" ";
+				var sql:String  = "update dbd_data_json set DATA = '"+s+"' where ID = "+connFinancialRecovery.DATA_ARR.getItemAt(0).ID+" ";
+				
+				new gnncAlert().__alert(sql);
+				if(x==1)
+					connExec.__sql(sql,'','',fResult,fFault);
+				
+				function fResult(event:*):void{
+				}
+				
+				function fFault(event:*):void{ 
+				}
+				
+			}
+			
+			private function __listRecoveryClientSimple():void
+			{
+				dataEnd_.selectedDate = new Date(_year,_month,25,12,30,30);
+
+				idDateAllMonthSelected_.selected = true;
+				idClientGroupSelected_.selected = true;
+				idClient_.__clear();
+				groupFinancialIn_.__CLEAR();
+				idCourseSelected_.selected = false;
+				idCourseGroupSelected_.selected = false;
+				__courseClear();
+				
+				__listRecoveryClient();
+			}
+			
+			private function __listRecoveryClient(w:String=''):void
+			{
+				if(btnViewEmail_.enabled==false)
+				{
+					new gnncNotification().__show('Aguarde...','',null,null,true,false,false);
+					return;
+				}
+				
+				var s:String = w;
+				s = gnncData.__replace2(s,"'",'');
+				s = gnncData.__replace2(s,"%",'');
+				s = gnncData.__replace2(s,"*",'');
+				s = gnncData.__replace2(s,".",'');
+				s = gnncData.__replace2(s,";",'');
+				s = gnncData.__replace2(s,'"','');
+				s = gnncData.__replace2(s,"\n",'');
+				
+				s = gnncData.__replace2(s," ",'%');
+				
+				if(s.length<3 && w && s){
+					new gnncNotification().__show('Pesquisa muito curta.','',null,null,true,false,false);
+					return;
+				}
+				
+				var d:Date = new Date();
+				d = dataEnd_.selectedDate;
+				
+				gnncGlobalLog.__add('...2');
+				connFinancialRecovery = new gnncAMFPhp();
+				
+				var b:String = "\n";
+				var sql:String = "" +
+					" select " +
+					" f.ID as ID, " +
+					" COUNT(f.ID) as ROWS, " +
+					" f.ID_CLIENT as ID_CLIENT, " +b+
+					" f.ID_PROJECT as ID_PROJECT, " +b+
+					
+					" p.NAME as NAME_COURSE, " +b+
+					" GROUP_CONCAT(p.NAME          order by f.DATE_END) as NAMES_COURSE, " +b+
+					
+					" GROUP_CONCAT(f.ID            order by f.DATE_END) as IDS, " +b+
+					" GROUP_CONCAT(f.VALUE_IN      order by f.DATE_END) as VALUES_IN, " +b+
+					" GROUP_CONCAT(f.NUMBER        order by f.DATE_END) as NUMBERS, " +b+
+					" GROUP_CONCAT(f.NUMBER_LETTER order by f.DATE_END) as NUMBERS_LETTER, " +b+
+					
+					" GROUP_CONCAT(g.NAME          order by f.DATE_END) as NAMES_GROUP, " +b+
+					
+					" GROUP_CONCAT(f.DATE_END      order by f.DATE_END) as DATES_END, " +b+
+					" GROUP_CONCAT(DATEDIFF(NOW(),f.DATE_END) order by f.DATE_END) as DATE_END_DIFF, " +b+
+					" GROUP_CONCAT(TIMESTAMPDIFF(MONTH,f.DATE_END,NOW()) order by f.DATE_END) as DATE_MONTH_DIFF, " +b+
+
+					" GROUP_CONCAT(f.DISCOUNT_PUNCTUALITY 	order by f.DATE_END) as DISCOUNT_PUNCTUALITY, " +b+
+					" GROUP_CONCAT(f.FINE_PERCENT 			order by f.DATE_END) as FINE_PERCENT, " +b+
+					" GROUP_CONCAT(f.FINE_PERCENT_TIME 		order by f.DATE_END) as FINE_PERCENT_TIME, " +b+
+					" GROUP_CONCAT(f.FINE_VALUE 			order by f.DATE_END) as FINE_VALUE, " +b+
+					" GROUP_CONCAT(f.FINE_VALUE_PERCENT 	order by f.DATE_END) as FINE_VALUE_PERCENT, " +b+
+					
+					" GROUP_CONCAT( CASE WHEN DATEDIFF(NOW(),f.DATE_END) > 0 THEN ROUND((f.VALUE_IN + f.VALUE_OUT) * (1 + ((f.FINE_PERCENT/100)/f.FINE_PERCENT_TIME) * DATEDIFF(NOW(),f.DATE_END) )+(f.FINE_VALUE)+(f.FINE_VALUE_PERCENT/100*(f.VALUE_IN + f.VALUE_OUT)),2) ELSE ROUND((f.VALUE_IN + f.VALUE_OUT)-f.DISCOUNT_PUNCTUALITY,2) END order by f.DATE_END) as VALUE_FINAL, " +b+
+					
+					" SUM(f.VALUE_IN) as VALUE_IN, " +b+
+					" c.NAME as NAME, " +b+
+					" c.EMAIL as EMAIL, " +b+
+					" c.EMAIL_FINANCIAL as EMAIL_FINANCIAL " +b+
+					" " +b+
+					
+					" from dbd_financial f " +b+
+					" left join dbd_client  c ON (f.ID_CLIENT = c.ID) " +b+
+					" left join dbd_group   g ON (f.ID_GROUP = g.ID)" +b+
+					" left join dbd_project p ON (f.ID_PROJECT = p.ID)" +b+
+					" " +b+
+					" where f.ID_CLIENT <> 0  " +b+
+					( s.length > 2 ? " " +
+						//" AND ( NAME_COURSE like '%"+s+"%' OR NAME_COURSE like '"+s+"%' OR " +
+						" AND ( c.NAME  like '%"+s+"%' OR c.NAME  like '"+s+"%' OR " +
+						" c.EMAIL like '%"+s+"%' OR c.EMAIL like '"+s+"%' ) " : "" 
+					)+
+					" " +b+
+					" AND f.DATE_FINAL < 1 " +b+
+					" AND f.DATE_CANCELED < 1" +b+
+					" AND f.VALUE_IN > 0" +b+
+					(
+						idDateAllMonthSelected_.selected?
+						" AND LEFT(f.DATE_END,7)  <= LEFT('"+gnncDate.__date2String(d)+"',7) " +b:
+						" AND LEFT(f.DATE_END,10) <= LEFT('"+gnncDate.__date2String(d)+"',10) " +b 
+					)+
+					
+					( idCourseSelected_.selected ? " AND f.ID_PROJECT > 0 " : '' ) +b+
+					( idCourse > 0 ? " AND f.ID_PROJECT = '"+idCourse+"' " : '' ) +b+
+					( idClient_.value > 0 ? " AND f.ID_CLIENT = '"+idClient_.value+"' " : '' ) +b+
+					( groupFinancialIn_.value > 0 ? " AND f.ID_GROUP = '"+groupFinancialIn_.value+"' " : '' ) +b+
+					
+					" group by " +b+
+					( idClientGroupSelected_.selected ? ' f.ID_CLIENT ':' f.ID ' ) +b+
+					( idCourseGroupSelected_.selected ? ',f.ID_PROJECT ' : '' ) +b+
+					
+					" order by " +
+					
+					( idCourseGroupSelected_.selected ? 'f.ID_PROJECT, ' : '' ) +b+
+					" c.NAME,f.DATE_END " +b+
+					
+					" limit 5000";
+				
+				//sql_.text = sql;
+				
+				listFinancialClientRecovery_.enabled = false;
+				
+				sql = String(sql).split("\n").join(" ").split("\r").join(" ");
+				connFinancialRecovery.__sql(sql,'','',fResult,fFault);
+				
+				function fResult(event:*):void{
+					filterName_._TEXT = '';
+					listFinancialClientRecovery_.dataProvider = connFinancialRecovery.DATA_ARR;
+					listFinancialClientRecovery_.enabled = true;
+					listFinancialSafeRecovery_.dataProvider = new ArrayCollection();
+					selected();
+				}
+				
+				function fFault(event:*):void{ 
+					filterName_._TEXT = '';
+					listFinancialClientRecovery_.enabled = true;
+					selected();
+				}
+			}
+			
+			private function selected():void
+			{
+				if(listFinancialClientRecovery_.selectedIndex<0){
+					panelRight_.visible = false;
+					return;
+				}
+				panelRight_.visible = true;
+				
+				var lst:Object = listFinancialClientRecovery_.selectedItem;
+				
+				jsonText_.text = gnncJSON.escape(gnncJSON.encode(lst));
+				
+				var c:Array = gnncData.__firstLetterUpperCase(lst.NAME_COURSE).split('(');
+				
+				emailClientCourse_.text = c[0];
+				emailClientName_.text  = emailClientLessName_.selected ? gnncData.__lessName(gnncData.__firstLetterUpperCase(lst.NAME),2) : gnncData.__firstLetterUpperCase(lst.NAME) ;
+				emailClientEmail_.text = String(lst.EMAIL).toLowerCase();
+				emailClientEmailFinancial_.text = String(lst.EMAIL_FINANCIAL).toLowerCase();
+				
+				listFinancialSafeRecovery_.dataProvider = json2gridSafe(lst,true);
+			}
+			
+			private function json2gridSafe(objectSelected:Object=null,fakeHeader:Boolean=false):ArrayCollection
+			{
+				if(!objectSelected)
+					return new ArrayCollection();
+				
+				var s:Object = objectSelected;
+				var listComplete:ArrayCollection = new ArrayCollection();
+				var o:Object = new Object();
+				var v:Object = new Object();
+				var i:uint = 0;
+				
+				if(fakeHeader==false)
+					for(i=0;i<uint(s.ROWS);i++)
+					{
+					}
+				else if(fakeHeader==true)
+					for(i=0;i<uint(s.ROWS);i++)
+					{
+						o = new Object();
+						v = String(s.DATES_END).split(',')[i];
+						v = gnncDate.__date2Legend(String(v));
+						if(idDateShowDay_.selected==false){
+							v = String(v).substr(2);
+						}
+						o.Vencimento = v;
+						v = String(s.NAMES_GROUP).split(',')[i];
+						o.PlanoDeContas = v;
+						v = String(s.NUMBERS_LETTER).split(',')[i]+' '+String(s.NUMBERS).split(',')[i];
+						o.Letra = v;
+						//v = String(s.NUMBERS).split(',')[i];
+						//o.NUMBERS = v;
+						v = String(s.VALUES_IN).split(',')[i];
+						o.ValorParcela = gnncDataNumber.__safeReal(v);
+						
+						v = String(s.DATE_END_DIFF).split(',')[i];
+						o.DiasDeAtraso = v;
+						v = String(s.DATE_MONTH_DIFF).split(',')[i];
+						o.MesesDeAtraso = v;
+						
+						v = String(s.DISCOUNT_PUNCTUALITY).split(',')[i]; //desconto de pontualidade
+						o.DescPont = Number(v)==false?0:v;
+						v = String(s.FINE_PERCENT).split(',')[i]; //juros
+						o.Juro = Number(v)==false?0:v;
+						v = String(s.FINE_PERCENT_TIME).split(',')[i]; //tempo do juros
+						o.JuroTemp= Number(v)==false?0:v;
+						v = String(s.FINE_VALUE).split(',')[i]; //multa em reais
+						o.Multa = Number(v)==false?0:v;
+						v = String(s.FINE_VALUE_PERCENT).split(',')[i]; //multa porcentagem do valor, aplicada uma vez
+						o.MutaPerc = Number(v)==false?0:v;
+						o.MutaPercReal = Number(v)==false?0:(Number(v)/100)*gnncDataNumber.__safeClear(o.ValorParcela);
+						/*
+						Juro por mês
+						J = C.i.n
+						Juro por dia
+						J = C.((i/100)/30).(n/30)
+						Onde:
+						J = juros,
+						C = capital,
+						i = taxa de empréstimo
+						n = períodos
+						
+						Por mes
+						M = C . (1 + i . n)
+						Por dia
+						M = C . (1 + ((i/100)/30) . n(em dias))
+						*/
+						v = Number(gnncDataNumber.__safeClear(o.ValorParcela)) * 
+							(( (Number(o.Juro)/100) / uint(o.JuroTemp) ) * 
+								int(o.DiasDeAtraso));
+						o.JurosAoDia = Number(v)==false?0:Number(o.DiasDeAtraso)<1?o.ValorParcela:gnncDataNumber.__safeReal(v);
+
+						v = Number(gnncDataNumber.__safeClear(o.ValorParcela)) * 
+						 (Number(o.Juro)/100) * 
+						 int(o.MesesDeAtraso);
+						o.JurosAoMes = Number(v)==false?0:Number(o.MesesDeAtraso)<1?o.ValorParcela:gnncDataNumber.__safeReal(v);
+						
+						v = gnncDataNumber.__safeClear(o.ValorParcela) + gnncDataNumber.__safeClear(o.JurosAoDia) + gnncDataNumber.__safeClear(o.MutaPercReal);
+						o.Final = gnncDataNumber.__safeReal(v);
+
+						listComplete.addItem(o);
+					}
+				
+				return listComplete;
+			}
+			
+			private function __courseClear():void
+			{
+				btnStart_.setStyle("skinClass", skin_buttonBlue);
+				courseName_.text = 'Nenhuma turma';
+				idCourse = 0;
+			}
+			
+			private function __courseSelected():void
+			{
+				var p:selectCourse = new selectCourse();
+				new gnncPopUp().__creation(p,false,true,removePopUp);
+				function removePopUp(e:*):void
+				{
+					if(!p._idCourse){
+						__courseClear();
+						return;
+					}
+					
+					btnStart_.setStyle("skinClass", skin_button);
+					idCourse = p._idCourse;
+					courseName_.text = p._nameCourse
+				}
+			}
+			
+			private function editClient():void
+			{
+				if(listFinancialClientRecovery_.selectedIndex<0)
+					return;
+				
+				var o:Object = listFinancialClientRecovery_.selectedItem;
+				var t:table_client = new table_client(o.ID_CLIENT);
+				var p:newClient = new newClient();
+				p._TABLE_CLIENT = t;
+				p.isPopUp = true;
+				new gnncPopUp().__creation(p,true,false);
+			}
+			
+			private function filter(textFilter_:String,repeat:Boolean=true):void
+			{
+				callLater(function():void{
+					callLater(function():void{
+						callLater(function():void{
+							listFinancialClientRecovery_.dataProvider = new gnncDataArrayCollection().__filterArray(connFinancialRecovery.DATA_ARR,['NAME','EMAIL'],textFilter_);
+						});
+					});
+				});
+			}
+			
+			
+			//-------------------------------------------------------------------------------------------------------------------
+			
+			
+			private function __sendBoleto():void
+			{
+				if(listFinancialClientRecovery_.selectedIndex<0){
+					new gnncNotification().__show('Selecione','Selecione um cliente na listagem para geração de boleto.');
+					return;
+				}
+				
+				var f:gnncFilesRemote = new gnncFilesRemote();			
+				var params:Object = new Object();
+				params.data = gnncJSON.encode(listFinancialClientRecovery_.selectedItem as Object);
+				params.list = gnncJSON.encode(listFinancialSafeRecovery_.dataProvider.toArray() as Object);
+				
+				f.__loadUrl('https://gnnc.com.br/librarys/collection/data/components/boleto/index.php?',fComplete,fError,params);				
+				
+				function fComplete():void{
+					
+					var h:HTML = new HTML();
+					h.percentWidth = 100;
+					h.htmlText = f._DATA_UTF;
+					
+					htmlGroup_.removeAllElements();
+					htmlGroup_.addElement(h);
+					htmlScroll_.viewport.verticalScrollPosition = 0;
+					viewHTML_.visible = true;
+				}
+				
+				function fError():void{
+					new gnncNotification().__show('E-mail','Ocorreu algum problema',gnncEmbedBlackWhite.bw_alert_error_32);
+				}
+			}			
+			
+			
+			private var send:gnncMailer = new gnncMailer();
+			private function __sendEmail(view:Boolean,num:uint=0):void
+			{
+				if(listFinancialClientRecovery_.selectedIndex<0){
+					new gnncNotification().__show('Selecione','Selecione um cliente na listagem para geração da cobrança.');
+					return;
+				}
+				
+				var lst:Object = listFinancialClientRecovery_.selectedItem;
+				
+				//emailClientName_.text           = gnncData.__firstLetterUpperCase(lst.NAME);
+				//emailClientEmail_.text          = String(lst.EMAIL).toLocaleLowerCase();
+				//emailClientEmailFinancial_.text = String(lst.EMAIL_FINANCIAL).toLocaleLowerCase();
+				
+				var date:String = gnncDate.__date2Legend('',new Date(),true,false,'',true);
+				
+				send = new gnncMailer();
+				
+				send.SMTPDebug = 0;//1;
+				
+				send.view     = view;
+				//send.httpBody = 'http://gnnc.com.br/librarys/collection/data/files/mailer/modelo-receipt-1.html';
+				send.httpBody = 'http://gnnc.com.br/librarys/collection/data/files/mailer/modelo-recovery-1.html';
+				
+				/*
+				* 'http://gnnc.com.br/librarys/collection/data/files/mailer/index.php' //fast - but no gmail
+				* 'http://gnnc.unaux.com/index.php'; //need javascript
+				* 'http://gnnc.epizy.com/index.php'; //slow | need javascript
+				* 'http://gnnc.000webhostapp.com/index.php'; //fast
+				*/
+				//send.setServer = 'http://gnnc.000webhostapp.com/index.php' + '?' + gnncDataRand.__key();
+				send.setServer = 'http://gnnc.com.br/librarys/collection/data/files/mailer/index.php' + '?' + gnncDataRand.__key();
+				
+				send.subject  = emailSubject_.text+' - '+gnncDate.__date2Legend('',new Date())+' REG '+gnncDataRand.__number(111,999);//(Number(_tableFinancialObject.VALUE_IN)>0?'Recibo ':'Pago ')+date+' - Fatura '+NUMBER_PAY_.text;
+				send.name     = gnncData.__firstLetterUpperCase(gnncGlobalStatic._documentPdfCompany);
+				
+				//server gmail
+				send.setConnectionGMail();
+				send.reply    = 'daybyday.apps@gnnc.com.br';
+				send.email    = 'daybyday.apps@gnnc.com.br';
+				send.user     = 'daybyday.apps@gnnc.com.br';
+				send.password = 'Zm6qKZLzKmsg4mNfAGVk';
+				send.crypt    = false;
+				
+				if(setSettingSend_.selected){
+					send.email    = gnncData.__trimText(setSettingSendEmail_.text);
+					send.reply    = gnncData.__trimText(setSettingSendEmail_.text);
+					send.user     = send.email;
+					send.password = gnncData.__trimText(setSettingSendPass_.text);
+					send.crypt    = false;
+				}
+				
+				if(emailClientReplyEmail_.text.length>7 && emailClientReplyEmail_.text.indexOf('@')>-1)
+					send.reply = gnncData.__trimText(emailClientReplyEmail_.text);
+				
+				/*
+				//server gnnc
+				send.setConnectionGNNCServer();
+				send.email    = 'daybyday.apps.server@gnnc.com.br';
+				send.reply    = 'daybyday.apps.server@gnnc.com.br';
+				send.user     = 'daybyday.apps.server@gnnc.com.br';
+				send.password = 'Zm6qKZLzKmsg4mNfAGVk';
+				send.crypt    = false;
+				*/
+				
+				if(gnncData.__trimText(emailClientEmailFinancial_.text)){
+					var lenEmail:Array = emailClientEmailFinancial_.text.split(';');
+					for(var e:uint=0;e<lenEmail.length;e++){
+						send.addTo(lenEmail[e],emailClientName_.text);
+					}
+				}
+				
+				//caso não exista email de cobranca, insere este normal
+				if(gnncData.__trimText(emailClientEmail_.text) && send.getTo().length==0){
+					send.addTo(emailClientEmail_.text,emailClientName_.text);
+				}
+				//send.addTo(emailClientEmail_.text,emailClientName_.text);
+				//send.addTo('adccacabral@asdas.com','0000');
+				
+				/*var content:String = 'Estamos enviando este e-mail para informá-lo que uma fatura foi gerada em xx/xx/2019 para você, ' +
+				'e já pode ser paga através do boleto anexado , ou depósito bancário.' +
+				'<br><br>' +
+				'Breve através de cartão de crédito.' +
+				'<br><br>' +
+				'A Fatura gerada pode ser paga em qualquer agência bancária ou lotérica até a data de vencimento. Após o vencimento, ' +
+				'a fatura poderá ser paga somente no próprio banco emissor ou por depósito.';*/
+				
+				/*var list:String = '<table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin:0px;border-bottom:1px #aaa solid;">' +
+				'<thead height="25" style="background-color:#f7f7f7;color:#444;">' +
+				'  <tr style="font-family:sans-serif, Helvetica,\'Trebuchet MS\', Arial; font-size:10px;background-color:#f7f7f7;color:#444;" height="25">' +
+				'    <th width="65" >Venc.</th>' +
+				'    <th width="65" >Valor</th>' +
+				'    <th >Descrição Simplificada</th>' +
+				'    <th width="65" >Reg.Nº</th>' +
+				'    <th width="65" >Pag.Nº</th>' +
+				'  </tr>' +
+				'</thead>' +
+				'<tr>' +
+				'  <td> 1 </td>' +
+				'  <td> 2 </td>' +
+				'  <td> 3 </td>' +
+				'  <td> 4 </td>' +
+				'  <td> 5 </td>' +
+				'</tr>' + 
+				'</table>';*/
+				
+				var tt:String = emailClientMessage_.text;
+				var cn:String = emailClientCourse_.text;
+				
+				tt = gnncData.__replace(tt,'{{NAME_CLIENT}}',emailClientName_.text);
+				tt = gnncData.__replace(tt,'{{NAME_COURSE}}',cn ? "<b>"+cn+"</b>.\n\n" : '' );
+				tt = gnncData.__replace(tt,'{{TODAY}}',gnncDate.__date2Legend('',new Date()));
+				
+				tt = gnncData.__replace(tt,'´','\"');
+				tt = gnncData.__replace(tt,'`','\"');
+				tt = gnncData.__replace(tt,'"','\"');
+				tt = gnncData.__replace(tt,"'",'\"');
+				tt = gnncData.__replace(tt,'\\','\\\\');
+				tt = gnncData.__replace(tt,'  ',' ');
+				tt = gnncData.__replace(tt,'  ',' ');
+				tt = gnncData.__replace(tt,"\n",'<br/>');
+				
+				var list:String = '';
+				var content:String = gnncData.__trimText(tt);
+				var listComplete:ArrayCollection = json2gridSafe(lst,true);
+				//var arr:ArrayCollection = new ArrayCollection();
+				
+				//listComplete = new gnncDataArrayCollection().__sort(listComplete,'NUMBERS',true,true);
+				//listComplete = new gnncDataArrayCollection().__sort(listComplete,'NUMBERS',false,true);
+				
+				var valorFinalJurosAoDia:Number = 0;
+				
+				for(var x:uint=0;x<listComplete.length;x++){
+					valorFinalJurosAoDia += gnncDataNumber.__safeClear(listComplete.getItemAt(x).Final);
+				}
+				
+				list += gnncDataHtml.array2Table(
+					listComplete,
+					new Array('Venc.','Plano de Contas','Registro Nº','Parcela (R$)','Juro (R$)','Final (R$)'),
+					new Array('Vencimento','PlanoDeContas','Letra','ValorParcela','JurosAoDia','Final'),
+					new Array('15%','25%','15%','15%','15%','15%'),
+					true);
+				
+				list += gnncDataHtml.array2Table(
+					new ArrayCollection([{Final:gnncDataNumber.__safeReal(valorFinalJurosAoDia)}]),
+					new Array('Valor Final (com juros + multa)'),
+					new Array('Final'),
+					new Array('100%'),
+					true);
+				
+				send.addFindAndReplaceText('{LIST}',list);
+				send.addFindAndReplaceText('{OBSERVATION}' ,'');
+				
+				send.addFindAndReplaceText('{TITLE}',emailSubject_.text);
+				send.addFindAndReplaceText('{CONTENT}',content);
+				
+				send.addFindAndReplaceText('{COMPANY_NAME}'        ,gnncData.__firstLetterUpperCase(gnncGlobalStatic._documentPdfCompany));
+				send.addFindAndReplaceText('{COMPANY_DESCRIPTION}' ,gnncData.__firstLetterUpperCase(gnncGlobalStatic._documentPdfDescription));
+				send.addFindAndReplaceText('{COMPANY_RECEIPT}'     ,gnncData.__firstLetterUpperCase(gnncGlobalStatic._documentPdfReceipt));
+				
+				send.addFindAndReplaceText('{COMPANY_WEBSITE}'     ,'');//'www.gnnc.com.br');
+				send.addFindAndReplaceText('{COMPANY_EMAIL}'       ,'');//'contato@gnnc.com.br');
+				send.addFindAndReplaceText('{COMPANY_PHONE}'       ,'');//'(85) 9.9926.1543');
+				
+				send.addFindAndReplaceText('{VALUE}'        ,gnncDataNumber.__safeReal(valorFinalJurosAoDia));
+				send.addFindAndReplaceText('{VALUE_LEGEND}' ,gnncDataNumber.__safeLegend(gnncDataNumber.__safeClear(valorFinalJurosAoDia)));
+				
+				send.addFindAndReplaceText('{SOCIAL_MEDIA}' ,'');
+				
+				//gnncAlert.__alert(
+				//send.getKey() + "<br>\n" + 
+				//send.decrypt(send.getKey()) + "<br>\n" + 
+				//send.encrypt(send.decrypt(send.getKey())) + "<br>\n" 
+				//);
+				
+				if(!emailClientEmail_.text && !emailClientEmailFinancial_.text){
+					new gnncAlert().__alert('Não foi encontrado e-mail para envio.','Envio de e-mail');
+					return;
+				}
+				/*if(emailClientEmail_.text != 'natancabral@gnnc.com.br'){
+				new gnncAlert().__alert('O módulo de e-mails está temporariamente em manutenção.','Envio de e-mail');
+				return;
+				}*/
+				
+				var sendTo:String = emailClientEmailFinancial_.text ? emailClientEmailFinancial_.text : emailClientEmail_.text ;
+				sendTo = sendTo.split(';').join(", <br>");
+				
+				if(view==false){
+					gnncAlert.__alert('Deseja enviar esta fatura de pagamento para o e-mail <b>'+sendTo+'</b> do cliente?',
+						'Recibo por e-mail',
+						function(e:gnncCloseEvent):void{
+							if(e.detail!=gnncAlert.YES)
+								return;
+							sendEmail(false);
+						},[gnncAlert.YES,gnncAlert.CANCEL]);
+				}else{
+					sendEmail(true);
+				}
+			}
+			
+			private function sendEmail(view:Boolean):void
+			{
+				send.sendGmail(fComplete,fError);
+				
+				btnCreate_.enabled = false;
+				btnViewEmail_.enabled = false;
+				btnViewEmail_.label = 'Carregando...';
+				
+				function fComplete():void{
+					//gnncAlert.__alert(send.result);
+					
+					btnCreate_.enabled = true;
+					btnViewEmail_.enabled = true;
+					btnViewEmail_.label = 'Visualizar E-mail';
+					
+					if(view){
+						var h:HTML = new HTML();
+						h.percentWidth = 100;
+						h.htmlText = send.result;
+						
+						//gnncAlert.__alert(send.result,'html');
+						//gnncClipBoard.__copyText(send.result);
+						
+						htmlGroup_.removeAllElements();
+						htmlGroup_.addElement(h);
+						htmlScroll_.viewport.verticalScrollPosition = 0;
+						viewHTML_.visible = true;
+					}
+					else{
+						if(send.result=='success'){
+							new gnncNotification().__show('E-mail','Enviado com sucesso',gnncEmbedBlackWhite.bw_email_32,null,false,false,false);
+						}else if(send.result==''){
+							new gnncNotification().__show('E-mail','Ocorreu algum problema',gnncEmbedBlackWhite.bw_alert_error_32,null,false,false,false);
+						}else{
+							gnncGlobalLog.__add(send.result);
+						}
+					}
+				}
+				
+				function fError():void{ 
+					btnCreate_.enabled = true;
+					btnViewEmail_.enabled = true;
+					btnViewEmail_.label = 'Visualizar E-mail';
+					new gnncNotification().__show('E-mail','Ocorreu algum problema',gnncEmbedBlackWhite.bw_alert_error_32);
+					gnncGlobalLog.__add(send.result);
+				}
+				
+			}
+			
+			private function __viewHTML(show:Boolean):void
+			{
+				viewHTML_.visible = show;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Style>
+		.accordionH {
+			skin: ClassReference("GNNC.skin.accordion.skin_accordion_header");
+		}
+	</fx:Style>
+	<fx:Declarations>
+		<mx:Fade id="FAD" duration="300" />
+	</fx:Declarations>
+	
+	<s:states>
+		<s:State name="normal" />
+		<s:State name="easy" />
+	</s:states>
+	
+	<elements:elementBarStatus width="68" height="100%" />
+	
+	<s:HGroup width="100%" height="100%" gap="0">
+		
+		<s:VGroup width="67" height="100%" gap="1">
+			<s:Button width="100%" height="60" icon="{gnncEmbedBlackWhite.bw_home_32}"   iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{panelLeft_.selectedIndex=0}" toolTip="Início"/>
+			<s:Button width="100%" height="60" icon="{gnncEmbedBlackWhite.bw_search_32}" iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{panelLeft_.selectedIndex=1}" toolTip="Pesquisa Avançada"/>
+			<s:Button width="100%" height="60" icon="{gnncEmbedBlackWhite.bw_label_32}" iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{panelLeft_.selectedIndex=1}" toolTip="Etiqueta" enabled="false"/>
+			<s:Button width="100%" height="60" icon="{gnncEmbedBlackWhite.bw_report_32}" iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{panelLeft_.selectedIndex=1}" toolTip="Contratos" enabled="false"/>
+			<s:Button width="100%" height="60" icon="{gnncEmbedBlackWhite.bw_description_32}" iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{panelLeft_.selectedIndex=1}" toolTip="Cobrança" enabled="false"/>
+			<s:Button width="100%" height="60" icon="{gnncEmbedBlackWhite.bw_phone_32}" iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{panelLeft_.selectedIndex=1}" toolTip="SMS" enabled="false"/>
+			<s:Button width="100%" height="60" icon="{gnncEmbedImage.CODEBAR_32}" iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{panelLeft_.selectedIndex=1}" toolTip="SMS" enabled="false"/>
+			<s:Button width="100%" height="60" icon="{gnncEmbedBlackWhite.bw_calendar_32}" iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{panelLeft_.selectedIndex=1}" toolTip="Contratos" enabled="false"/>
+			<s:Button width="100%" height="60" icon="{gnncEmbedBlackWhite.bw_calendar_32_alarm}" iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{panelLeft_.selectedIndex=1}" toolTip="Contratos" enabled="false"/>
+		</s:VGroup>
+		
+		<elements:elementVLine width="1" />
+		
+		<s:Group width="230" height="100%">
+			
+			<elements:elementBarStatus height="100%" width="230" alpha=".5"/>
+			
+			<mx:Accordion id="panelLeft_" width="230" top="2" bottom="1" headerHeight="31" fontSize="11" fontWeight="bold" contentBackgroundAlpha="0" borderVisible="false" openDuration="300" headerStyleName="AC" horizontalGap="0" verticalGap="-1">
+				<s:NavigatorContent showEffect="{FAD}" label="Home" fontWeight="normal" icon="{gnncEmbedBlackWhite.bw_home_16}" width="100%" height="100%" creationPolicy="all">
+					<s:Scroller left="0" top="0" right="0" bottom="0" horizontalScrollPolicy="off">
+						<s:VGroup width="100%" height="100%" gap="1" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+							
+							<s:HGroup width="100%" gap="1" horizontalAlign="center">
+								<s:Button width="18" height="45" click="{__changeMonthPrev()}"
+										  icon="{gnncEmbedImage.PREV_16}"
+										  skinClass="GNNC.skin.button.skin_buttonLink"
+										  toolTip="Mês Anterior"/>
+								<s:HGroup width="100%" gap="1" horizontalAlign="center">
+									<elements:elementLabelFont id="MONTH_TXT_" fontSize="45"
+															 maxDisplayedLines="1" paddingTop="5"
+															 showTruncationTip="false" text=""
+															 textAlign="right"/>
+									<elements:elementLabelFont id="YEAR_TXT_" color="0x999999"
+															 fontSize="45" maxDisplayedLines="1"
+															 paddingTop="5" showTruncationTip="false"
+															 text="" textAlign="left"/>
+								</s:HGroup>
+								<s:Button width="18" height="45" click="{__changeMonthNext()}"
+										  icon="{gnncEmbedImage.NEXT_16}"
+										  skinClass="GNNC.skin.button.skin_buttonLink"
+										  toolTip="Próximo Mês"/>
+							</s:HGroup>
+							
+							<s:Rect height="5"/>
+							
+							<s:Button width="100%" height="30" label="Pesquisar"
+									  click="{__listRecoveryClientSimple()}" fontSize="11" fontWeight="bold"
+									  icon="{gnncEmbedBlackWhite.bw_search_16}"
+									  skinClass="GNNC.skin.button.skin_buttonTextLeft"
+									  />
+
+							<s:Button width="100%" height="30" label="Visualizar E-mail" icon="{gnncEmbedBlackWhite.bw_global_16}" click="{__sendEmail(true)}"
+									  skinClass="GNNC.skin.button.skin_buttonTextLeft"
+									  />
+							<s:Button width="100%" height="30" label="Visualizar Boleto" icon="{gnncEmbedBlackWhite.bw_financial_16_type_boleto}" click="{__sendBoleto()}"
+									  skinClass="GNNC.skin.button.skin_buttonTextLeft"
+									  />
+							<s:Button width="100%" height="30" label="Enviar E-mail"     icon="{gnncEmbedBlackWhite.bw_email_16}" click="{__sendEmail(false)}" fontWeight="bold"
+									  skinClass="GNNC.skin.button.skin_buttonTextLeft"
+									  />
+							<s:Button width="100%" height="30" label="Enviar em Massa"     icon="{gnncEmbedBlackWhite.bw_email_16}" click="{__sendEmail(false)}" fontWeight="bold"
+									  skinClass="GNNC.skin.button.skin_buttonTextLeft" enabled="false"
+									  />
+
+							<s:Rect height="5"/>
+							
+							<s:HGroup width="100%" height="30" gap="-1">
+								<s:Button width="30" height="30" label="2" click="{__sendEmail(false)}" fontWeight="normal"
+										  enabled="false"
+										  />
+								<s:Button width="30" height="30" label="3" click="{__sendEmail(false)}" fontWeight="normal"
+										  enabled="false"
+										  />
+								<s:Button width="30" height="30" label="4" click="{__sendEmail(false)}" fontWeight="normal"
+										  enabled="false"
+										  />
+								<s:Button width="30" height="30" label="5" click="{__sendEmail(false)}" fontWeight="normal"
+										  enabled="false"
+										  />
+								<s:Button width="100%" height="30" label="6 meses de atraso"     icon="{gnncEmbedBlackWhite.bw_email_16}" click="{__sendEmail(false)}" fontWeight="normal"
+										  skinClass="GNNC.skin.button.skin_buttonTextLeft" enabled="false"
+										  />
+							</s:HGroup>
+
+						</s:VGroup>
+					</s:Scroller>
+				</s:NavigatorContent>
+				<s:NavigatorContent showEffect="{FAD}" label="Avançado" fontWeight="normal" icon="{gnncEmbedBlackWhite.bw_search_16}" width="100%" height="100%" creationPolicy="all">
+					<s:Scroller left="0" top="0" right="0" bottom="0" horizontalScrollPolicy="off">
+						<s:VGroup width="100%" height="100%" gap="1" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+							
+							<elements:elementLabelDropShadow height="30" fontSize="13" fontWeight="normal" text="CONTAS"/>
+							
+							<s:Button id="ID_FINANCIAL_ACCOUNT_" width="100%" height="30"
+									  label="Conta / Banco" click="{/*__setAccount()*/}" fontWeight="bold"
+									  icon="{/*gnncEmbedBank.banrisul_16*/gnncEmbedBlackWhite.bw_financial_16_account}"
+									  showErrorTip="true" showInAutomationHierarchy="true"
+									  excludeFrom="easy"
+									  enabled="false"
+									  />
+							
+							<elements:elementLabelDropShadow id="period_" height="30" fontSize="13" fontWeight="normal" text="VENCIMENTO"/>
+							
+							<gnncDateButton:gnncDateButton id="dataEnd_" width="100%" height="30" selectedDate="{new Date()}"/>
+							
+							<s:HGroup width="100%" gap="1" verticalAlign="middle">
+								<s:Rect height="20" width="1"/>
+								<s:CheckBox id="idDateShowDayHighLight_" selected="false" label="Mostrar dia de vencimento em destaque" enabled="false" />
+							</s:HGroup>
+							<s:HGroup width="100%" gap="1" verticalAlign="middle">
+								<s:Rect height="20" width="1"/>
+								<s:CheckBox id="idDateShowDay_" selected="true" label="Mostrar dia de vencimento na listagem" />
+							</s:HGroup>
+							<s:HGroup width="100%" gap="1" verticalAlign="middle">
+								<s:Rect height="20" width="1"/>
+								<s:CheckBox id="idDateAllMonthSelected_" selected="true" label="Considerar todo o mês" toolTip="Caso seja selecionado o sistema ignora o dia de vencimento e trata todos os lançamentos do mês como vencimento. Do dia 01 ao 31 do mês será consultado." />
+							</s:HGroup>
+							<s:HGroup width="100%" gap="1" verticalAlign="middle">
+								<s:Rect height="20" width="1"/>
+								<s:CheckBox id="idAttachSelected_" selected="false" label="Enviar arquivo anexado" enabled="false"/>
+							</s:HGroup>
+							
+							<elements:elementLabelDropShadow height="30" fontSize="13" fontWeight="normal" text="CLIENTE"/>
+							
+							<s:HGroup width="100%" gap="1" verticalAlign="middle" paddingBottom="10">
+								<s:Rect height="20" width="1"/>
+								<s:CheckBox id="idClientGroupSelected_" label="Agrupamento por clientes" selected="true" />
+							</s:HGroup>
+							
+							<select:conSelect_CLIENT id="idClient_" height="30" width="100%" _ADD="false" _search="false"/>
+							
+							<select:conSelect_GROUP id="groupFinancialIn_" width="100%" height="30"
+													_ADD="false" _ICON="false" _FILTER="true" _MIX="FINANCIAL_IN" enabled="true"
+													prompt="Grupo de Receita..."
+													/>
+							
+							<elements:elementLabelDropShadow height="30" fontSize="13" fontWeight="normal" text="CURSO"/>
+							
+							<s:HGroup width="100%" gap="1" verticalAlign="middle">
+								<s:Rect height="20" width="1"/>
+								<s:CheckBox id="idCourseSelected_" label="Apenas com cursos vinculados"  click="{idCourseSelected_.selected?true:__courseClear();}" />
+							</s:HGroup>
+							<s:HGroup width="100%" gap="1" verticalAlign="middle" enabled="{idCourseSelected_.selected}" paddingBottom="10">
+								<s:Rect height="20" width="1"/>
+								<s:CheckBox id="idCourseGroupSelected_" label="Agrupamento por turmas"  
+											click="{
+											idCourseSelected_.selected?true:__courseClear();
+											idCourseGroupSelected_.selected?idClientGroupSelected_.selected=true:false;
+											}" 
+											toolTip="Caso o aluno esteja vinculado a mais de uma turma este recurso separa mantendo em diferentes turmas"
+											/>
+							</s:HGroup>
+							
+							<s:HGroup width="100%" height="30" gap="2" verticalAlign="middle" enabled="{idCourseSelected_.selected}">
+								<s:Button id="btnStart_" width="100%" height="30"
+										  label="Selecionar a turma" click="{__courseSelected()}"
+										  fontWeight="bold" icon="{gnncEmbedBlackWhite.bw_course_16}"
+										  skinClass="GNNC.skin.button.skin_buttonBlue"/>
+								<s:Button width="30" height="30" click="{__courseClear()}"
+										  icon="{gnncEmbedBlackWhite.bw_clear_14_selection}"
+										  skinClass="GNNC.skin.button.skin_buttonLink"/>
+							</s:HGroup>
+							
+							<s:Label id="courseName_" width="100%" fontSize="11" fontWeight="normal" enabled="{idCourseSelected_.enabled}"
+									 maxDisplayedLines="1" showTruncationTip="true" color="0xaaaaaa"
+									 text="Nenhuma turma" verticalAlign="middle" height="20"/>
+							
+							<s:Button label="Pesquisar" height="30" width="100%" click="{__listRecoveryClient()}" fontWeight="bold" icon="{gnncEmbedBlackWhite.bw_search_16}" />
+							
+						</s:VGroup>
+					</s:Scroller>
+					
+				</s:NavigatorContent>
+				<s:NavigatorContent showEffect="{FAD}" label="Anexo" fontWeight="normal" icon="{gnncEmbedBlackWhite.bw_attach_16}" width="100%" height="100%" creationPolicy="all">
+					<s:Scroller left="0" top="0" right="0" bottom="0" horizontalScrollPolicy="off">
+						<s:VGroup width="100%" height="100%" gap="1" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+							<elements:elementLabelDropShadow height="30" fontSize="13" fontWeight="normal" text="ARQUIVOS ANEXADOS"/>
+						</s:VGroup>
+					</s:Scroller>
+				</s:NavigatorContent>
+			</mx:Accordion>
+		</s:Group>
+		
+		<elements:elementVLine width="1" />
+		
+		<s:VGroup width="100%" height="100%">
+			
+			<s:HGroup width="100%" padding="20" gap="1" verticalAlign="middle">
+				
+				<s:Image source="{gnncEmbedBlackWhite.bw_search_16}" toolTip="Pesquisar Pessoas e Lançamentos"/>
+				<elements:elementInputSearch id="search_" width="170" height="25"
+										   _FUNCTION_Event_="{function(e:Event):void{ __listRecoveryClient(search_.text)}}" />
+				
+				<s:Rect width="10"/>
+				
+				<s:Image source="{gnncEmbedImage.FILTER_16}" toolTip="Filtrar Pesssoas e Lançamentos"/>
+				<elements:elementInputSearch id="filterName_" width="170" _FILTER="true"
+										   _FUNCTION_Event_="{function(e:Event):void{filter(filterName_._TEXT)}}" />
+				
+				<s:Rect width="100%"/>
+				
+				<elements:elementLabelFont id="labelRows_" text="{'TOTAL: '+listFinancialClientRecovery_.dataProvider.length}" paddingRight="10" height="25"/>
+			</s:HGroup>
+			
+			<s:List width="100%" height="100%" id="listFinancialClientRecovery_" dataProvider="{new ArrayCollection()}" borderVisible="false" contentBackgroundAlpha="0"
+					horizontalScrollPolicy="off" click="{selected()}" keyUp="{selected()}" mouseUp="{selected()}"
+					itemRenderer="GNNC.modules.financial.itemRender.itemRender_financialRecovery_forList"
+					>
+				<s:layout>
+					<s:VerticalLayout gap="0" padding="20" paddingTop="0"/>
+				</s:layout>
+			</s:List>
+			
+			<s:VGroup width="100%" paddingLeft="20" paddingRight="20" paddingBottom="20" gap="1">
+				<s:DataGrid width="100%" height="120" id="listFinancialSafeRecovery_" dataProvider="{new ArrayCollection()}" rowHeight="25" fontSize="11" borderVisible="true" borderColor="0xAAAAAA"
+							selectionColor="0xEEEEEE" horizontalScrollPolicy="off" rollOverColor="0xFAFAFA" variableRowHeight="false" resizableColumns="false" >
+				</s:DataGrid>
+				<s:DataGrid width="100%" height="100" id="list_" dataProvider="{new ArrayCollection()}" rowHeight="25" fontSize="11" borderVisible="true" borderColor="0xAAAAAA"
+							selectionColor="0xEEEEEE" horizontalScrollPolicy="off" rollOverColor="0xFAFAFA" variableRowHeight="false" resizableColumns="false" >
+				</s:DataGrid>
+			</s:VGroup>
+			
+			
+			<s:Group width="100%" height="35">
+				<elements:elementBarStatus height="35" />
+				<s:HGroup left="0" right="0" height="35" gap="1" paddingLeft="3" paddingRight="3" verticalAlign="middle">
+					<s:Rect width="100%"/>
+				</s:HGroup>
+			</s:Group>
+			
+		</s:VGroup>
+		
+		<elements:elementVLine width="1" />
+		
+		<s:Group width="200" height="100%">
+			<elements:elementBarStatus height="100%" width="100%" alpha=".6"/>
+			<!-- s:VGroup width="100%" gap="1" padding="10">
+			<elements:elementLabelDropShadow height="30" fontSize="13" fontWeight="normal" text="AÇÕES"/>
+			</s:VGroup -->
+			
+			<s:Scroller width="100%" height="100%" horizontalScrollPolicy="off">
+				<s:VGroup width="100%" height="100%" padding="20" paddingRight="15" paddingTop="10" gap="1" id="panelRight_" visible="false">
+					
+					<elements:elementLabelDropShadow height="30" fontSize="13" fontWeight="normal" text="E-MAIL"/>
+					
+					<s:HGroup gap="1" width="100%">
+						<s:TextInput width="100%" height="30" id="emailClientCourse_" text="Curso" prompt="Nome da Turma" enabled="true" paddingLeft="7"/>
+					</s:HGroup>
+					<s:HGroup gap="1" width="100%">
+						<s:TextInput width="100%" height="30" id="emailClientName_" text="Contato GNNC" prompt="Cliente Nome:Enviar" enabled="false" paddingLeft="7"/>
+						<s:Button width="30" height="30" icon="{gnncEmbedBlackWhite.bw_edit_16}" click="{editClient()}"/>
+					</s:HGroup>
+					<s:HGroup gap="1" width="100%" paddingTop="3" paddingBottom="4">
+						<s:CheckBox label="Exibir nome abreviado" id="emailClientLessName_" selected="false" click="{selected()}"/>
+					</s:HGroup>
+					<s:TextInput width="100%" height="30" id="emailClientEmail_" text="contato@gnnc.com.br" prompt="Cliente Email:Enviar" enabled="false" paddingLeft="7"/>
+					<s:TextInput width="100%" height="30" id="emailClientEmailFinancial_" text="contato@gnnc.com.br" prompt="Cliente Email Cobrança:Enviar" enabled="false" paddingLeft="7"/>
+					<s:TextInput width="100%" height="30" id="emailClientReplyEmail_" text="" prompt="Empresa Email:Responder à" paddingLeft="7"/>
+					<s:Rect height="5"/>
+					<s:HGroup gap="1" width="100%">
+						<s:TextInput width="100%" height="30" id="emailSubject_" text="" prompt="Assunto do E-mail" enabled="true" paddingLeft="7"/>
+					</s:HGroup>
+					<s:TextArea width="100%" height="120" id="emailClientMessage_" 
+								paddingBottom="15" paddingLeft="15" paddingRight="15" paddingTop="15" /> 
+					
+					<s:Button id="btnViewEmail_" width="100%" height="30" label="Visualizar E-mail" icon="{gnncEmbedBlackWhite.bw_global_16}" click="{__sendEmail(true)}"
+							  skinClass="GNNC.skin.button.skin_buttonTextLeft"
+							  />
+					<s:Button id="btnCreate_"    width="100%" height="30" label="Enviar E-mail"     icon="{gnncEmbedBlackWhite.bw_email_16}" click="{__sendEmail(false)}" fontWeight="bold"
+							  skinClass="GNNC.skin.button.skin_buttonTextLeft"
+							  />
+					
+					<mx:Text id="jsonText_" width="100%" height="100%" minHeight="200" fontSize="10" alpha=".5"/>
+					<s:HGroup gap="1" width="100%" verticalAlign="middle">
+						<s:CheckBox id="setSettingSend_" selected="false" label="GMAIL"/>
+						<s:Rect width="5"/>
+						<s:TextInput width="100%" height="30" id="setSettingSendEmail_" prompt="Email" paddingLeft="7" paddingRight="7"
+									 displayAsPassword="false" enabled="{setSettingSend_.selected}"
+									 />
+						<s:TextInput width="100%" height="30" id="setSettingSendPass_" prompt="Senha" paddingLeft="7" paddingRight="7"
+									 displayAsPassword="true" enabled="{setSettingSend_.selected}"
+									 />
+						<s:Button width="30" height="30" icon="{gnncEmbedBlackWhite.bw_access_16_unlock}"
+								  click="{gnncUrlNavegator.__navegatorUrl('https://myaccount.google.com/lesssecureapps')}"
+								  enabled="{setSettingSend_.selected}"
+								  />
+					</s:HGroup>
+					
+				</s:VGroup>
+			</s:Scroller>
+			
+		</s:Group>
+		
+	</s:HGroup>
+	
+	<s:Group id="viewHTML_" width="800" height="100%" visible="false">
+		
+		<elements:elementStageBox />
+		<elements:elementLabelFont text="VISUALIZAR HTML" fontSize="9" fontWeight="normal" left="1" top="6" right="1" textAlign="center" color="0x555555"/>
+		<s:VGroup width="100%" top="0" bottom="34" gap="5" padding="20">
+			<s:Group width="100%" height="100%">
+				<s:Scroller id="htmlScroll_" width="100%" height="100%" horizontalScrollPolicy="off">
+					<s:Group id="htmlGroup_" width="100%">
+						<!-- mx:HTML id="html_" width="100%" contentBackgroundAlpha="0" >
+						<mx:htmlText>
+						<![CDATA[
+						]]>
+						</mx:htmlText>
+						</mx:HTML -->	
+					</s:Group>
+				</s:Scroller>
+				<s:Group left="15" top="0" right="25" bottom="0"/> 
+			</s:Group>
+		</s:VGroup>
+		
+		<elements:elementBarStatus left="1" right="1" bottom="1" height="34" />
+		<s:HGroup left="1" right="1" bottom="1" height="34" gap="2" paddingLeft="5" paddingRight="5" verticalAlign="middle">
+			<s:Label text="Para voltar clique no botão ao lado" fontWeight="bold" click="{__viewHTML(false)}" paddingLeft="7"/>
+			<s:Rect width="100%"/>
+			<s:Button height="25" icon="{gnncEmbedBlackWhite.app_close_16_clean}" label="Fechar Visualização" click="{__viewHTML(false)}" skinClass="GNNC.skin.button.skin_buttonLink" />
+		</s:HGroup>
+		
+	</s:Group> 
+	
+</s:Module>

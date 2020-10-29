@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  
+		  width="100%" height="100%" 
+		  
+		  creationComplete="{__start()}"
+		  
+		  xmlns:stage="GNNC.elements.stage.*" 
+		  xmlns:component="GNNC.elements.component.*" 
+		  xmlns:financial="GNNC.modules.financial.*" 
+		  xmlns:formNew="GNNC.modules.group.formNew.*" 
+		  xmlns:calendar="GNNC.modules.calendar.*" xmlns:user="GNNC.modules.user.*" xmlns:elements="GNNC.UI.elements.*" 
+		  
+		  >
+	<fx:Script>
+		<![CDATA[
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.data.data.gnncDataBindable;
+			import GNNC.data.permission.gnncPermission;
+			
+			private function __start():void
+			{
+				gnncDataBindable.__loginSession(__permission);
+			}
+			
+			private function __permission(e:*=null):void
+			{
+				gnncPermission.__blockModule(this,'module-group');
+			}
+			
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+	</fx:Declarations>
+	
+	<elements:elementBarStatus height="30" colorStart="0x777777" colorEnd="0x777777" />
+	<s:TabBar height="30" dataProvider="{panelCenter_}" skinClass="GNNC.skin.tabBar.skin_tabBar_forMenuWhite" width="100%" maxWidth="{7*110}" horizontalCenter="0" />
+	
+	<mx:ViewStack id="panelCenter_" top="30" left="0" right="0" bottom="0">
+		<s:NavigatorContent creationPolicy="all" label="CADASTROS" icon="{gnncEmbedBlackWhite.bw_client_16_v2}">
+			<user:moduleClientNew />
+		</s:NavigatorContent>
+		<s:NavigatorContent width="100%" height="100%" label="CALENDÁRIO" icon="{gnncEmbedBlackWhite.bw_calendar_16}">
+			<calendar:moduleCalendar 
+				_getCalendar="true"
+				_getCalendarCourseCron="true"
+				_getFinancial="true" 
+				_getJobs="true" 
+				/>
+		</s:NavigatorContent>
+		<!-- s:NavigatorContent width="100%" height="100%" label="LIVRO CX" icon="{gnncEmbedBlackWhite.bw_financial_16_type_book}">
+			<financial:moduleFinancialGroup_book />
+		</s:NavigatorContent -->
+		<s:NavigatorContent width="100%" height="100%" label="CENÁRIO" icon="{gnncEmbedBlackWhite.bw_chart_16}">
+			<financial:moduleFinancialGroup_stage />
+		</s:NavigatorContent>
+		<!-- s:NavigatorContent width="100%" height="100%" label="CONTRATOS" 		icon="{gnncEmbedBlackWhite.bw_financial_16}">
+			<elements:elementLabelDropShadow text="VOCÊ NÃO TEM PERMISSÃO PARA ACESSAR ESTA ÁREA" horizontalCenter="0" verticalCenter="0" fontSize="12"/>
+		</s:NavigatorContent>
+		<s:NavigatorContent width="100%" height="100%" label="META / EMPRÉSTIMO" 			icon="{gnncEmbedBlackWhite.bw_chart_16}">
+			<elements:elementLabelDropShadow text="VOCÊ NÃO TEM PERMISSÃO PARA ACESSAR ESTA ÁREA" horizontalCenter="0" verticalCenter="0" fontSize="12"/>
+		</s:NavigatorContent>
+		<s:NavigatorContent width="100%" height="100%" label="COLABORADORES" 	icon="{gnncEmbedBlackWhite.bw_user_16}">
+			<elements:elementLabelDropShadow text="VOCÊ NÃO TEM PERMISSÃO PARA ACESSAR ESTA ÁREA" horizontalCenter="0" verticalCenter="0" fontSize="12"/>
+		</s:NavigatorContent>
+		<s:NavigatorContent width="100%" height="100%" label="GRUPOS" icon="{gnncEmbedBlackWhite.bw_series_group_16}">
+			<financial:moduleFinancialGroup_series />
+		</s:NavigatorContent -->
+		<s:NavigatorContent width="100%" height="100%" label="ARMAZENAR" icon="{gnncEmbedBlackWhite.bw_attach_16}">
+			<financial:moduleFinancialGroup_attach />
+		</s:NavigatorContent>
+		<s:NavigatorContent width="100%" height="100%" label="USUÁRIOS" icon="{gnncEmbedBlackWhite.bw_user_16}">
+			<user:moduleClientUserNew />
+		</s:NavigatorContent>
+	</mx:ViewStack>
+	
+	<elements:elementHLine top="30" height="1" />
+	
+</s:Module>

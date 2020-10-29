@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:ItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+				xmlns:s="library://ns.adobe.com/flex/spark" 
+				xmlns:mx="library://ns.adobe.com/flex/mx" 
+				
+				width="100%" height="30"
+				rightMouseDown="{__menuRight(event)}" 
+				
+				autoDrawBackground="false" 
+				xmlns:stage="GNNC.elements.stage.*" xmlns:elements="GNNC.UI.elements.*"
+				>
+	<fx:Script>
+		<![CDATA[
+			import GNNC.data.data.gnncData;
+			import GNNC.data.data.gnncDataNumber;
+			import GNNC.data.globals.gnncGlobalArrays;
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.gnncEmbedImage;
+			
+			private function __menuRight(e:MouseEvent):void
+			{
+				return;
+				var itemUser:ContextMenuItem  		= new ContextMenuItem(data.USER,false,false);
+				itemUser.addEventListener			(Event.SELECT,function(e:Event):void{  });
+				
+				// Create custom context menu. 
+				var cm:ContextMenu 	= new ContextMenu();
+				cm.hideBuiltInItems	();
+				cm.customItems 		= [itemUser];
+				
+				this.contextMenu 	= cm;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="normal"/>
+		<s:State name="hovered"/>
+		<s:State name="selected"/>
+		<s:State name="normalAndShowsCaret"/>
+		<s:State name="hoveredAndShowsCaret"/>
+		<s:State name="selectedAndShowsCaret"/>
+	</s:states>
+	
+	<elements:elementHLine bottom="0" left="0" right="0" alpha=".5"/>
+
+	<s:Rect includeIn="hoveredAndShowsCaret,hovered" left="0" right="1" top="0" bottom="0"
+			radiusX="4" radiusY="4">
+		<s:fill>
+			<s:SolidColor color="0xeeeeee"/>
+		</s:fill>
+	</s:Rect>
+	
+	<s:Rect includeIn="selected,selectedAndShowsCaret" left="0" right="1" top="0" bottom="0"
+			radiusX="4" radiusY="4">
+		<s:fill>
+			<s:LinearGradient rotation="90">
+				<s:GradientEntry color="0x3785e2"/>
+				<s:GradientEntry color="0x2170cf"/>
+			</s:LinearGradient>
+		</s:fill>
+	</s:Rect>
+	
+	<s:HGroup left="1" top="1" right="1" bottom="2" gap="1" verticalAlign="middle" paddingLeft="6" paddingRight="3" 
+			  color.selected="0xFFFFFF" color.selectedAndShowsCaret="0xFFFFFF"
+			  >
+		
+		<s:Image source="{gnncEmbedBlackWhite.bw_email_16}" toolTip="{'Agrupamento de Cobrança'}"/>
+		<s:Image source="{gnncEmbedBlackWhite.bw_client_16_v2}" toolTip="{'Cliente, Id: '+data.ID_CLIENT}"/>
+		<s:Label text="{gnncData.__firstLetterUpperCase(data.NAME)}" fontWeight="bold" width="100%" maxDisplayedLines="1" showTruncationTip="true"
+				 paddingLeft="3" verticalAlign="middle" paddingTop="1"
+				 /> 
+		<s:Image source="{ gnncEmbedBlackWhite.bw_email_16 }" toolTip="E-mail" width="12" height="12" smooth="true" />
+		<s:Label text="{String(data.EMAIL).toLowerCase()}" fontSize="11" width="150" maxDisplayedLines="1" showTruncationTip="true"
+				 paddingLeft="5" verticalAlign="middle" paddingTop="1"
+
+				 textDecoration="none" color="0x3785e2" color.selected="0xFFFFFF" color.selectedAndShowsCaret="0xFFFFFF" buttonMode="true"
+				 />
+
+		<s:Label text="{data.ROWS}" fontWeight="normal" width="30" maxDisplayedLines="1" showTruncationTip="true"
+				 paddingLeft="3" textAlign="center" toolTip="Quantidade de lançamentos" paddingTop="1"
+				 />
+
+		<s:Label text="{gnncDataNumber.__safeReal(data.VALUE_IN,2,'')}" fontWeight="bold" width="100" maxDisplayedLines="1" showTruncationTip="true"
+				 paddingLeft="3" textAlign="right" toolTip="{'Valores :'+data.VALUES_IN}" paddingRight="10" paddingTop="1"
+				 />
+
+		<s:Button icon="{gnncEmbedBlackWhite.bw_global_16}" width="25" height="25" toolTip="Visualizar e-mail" enabled="false"/>
+		<s:Button icon="{gnncEmbedBlackWhite.bw_email_16}" width="25" height="25" toolTip="Enviar e-mail" enabled="false"/>
+		
+	</s:HGroup>
+		
+</s:ItemRenderer>

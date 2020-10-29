@@ -1,0 +1,570 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  
+		  width="750" height="650"
+		  creationComplete="{__start()}" 
+		  
+		  xmlns:stage="GNNC.elements.stage.*" 
+		  xmlns:component="GNNC.elements.component.*" 
+		  xmlns:select="GNNC.elements.component.select.*" 
+		  xmlns:gnncDateField4="GNNC.UI.gnncDateField4.*" xmlns:elements="GNNC.UI.elements.*"
+		  
+		  >
+	<fx:Declarations>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import GNNC.UI.gnncAlert.gnncAlert;
+			import GNNC.UI.gnncPopUp.gnncPopUp;
+			import GNNC.data.conn.gnncAMFPhp;
+			import GNNC.data.data.gnncData;
+			import GNNC.data.data.gnncDataNumber;
+			import GNNC.data.date.DateUtils;
+			import GNNC.data.date.gnncDate;
+			import GNNC.data.globals.gnncGlobalStatic;
+			import GNNC.data.sql.gnncSql;
+			import GNNC.event.gnncEventGeneral;
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.gnncEmbedImage;
+			import GNNC.keyboard.gnncKeyboard;
+			import GNNC.modules.client.formView.viewClient;
+			import GNNC.modules.course.formNew.selectCourse;
+			import GNNC.skin.button.skin_button;
+			import GNNC.skin.button.skin_buttonBlue;
+			import GNNC.sqlTables.table_client;
+			import GNNC.sqlTables.table_course_parcel;
+			import GNNC.sqlTables.table_financial;
+			
+			import mx.collections.ArrayCollection;
+			
+			import spark.events.TextOperationEvent;
+			
+			//private var _gnncGlobal:gnncGlobalStatic 				= new gnncGlobalStatic(true);
+			private var _connParcel:gnncAMFPhp 		= new gnncAMFPhp();
+			private var _connStudent:gnncAMFPhp 	= new gnncAMFPhp();
+			private var _connExec:gnncAMFPhp 		= new gnncAMFPhp();
+			private var _gnncPopUp:gnncPopUp		= new gnncPopUp();
+
+			public var _change:Boolean 				= false;
+			public var _tableClass:table_financial 	= new table_financial();
+			
+			public var _idCouse:uint = 0;
+			public var _nameCourse:String = '';
+			
+			private function __start():void
+			{
+				this.addEventListener(KeyboardEvent.KEY_UP,
+					function(event:KeyboardEvent):void
+					{
+						if(gnncKeyboard.__ENTER(event))
+						{
+							return;
+							focusManager.getNextFocusManagerComponent().setFocus();
+							focusManager.getNextFocusManagerComponent().drawFocus(true);
+							
+							focusManager.showFocus();
+							focusManager.getFocus();
+							focusManager.activate();
+						}
+					}
+				)
+
+				//set dates
+				DATE_START_.selectedDate 	= gnncDate.__string2Date(_tableClass.DATE_START,false);
+				DATE_END_.selectedDate 		= gnncDate.__string2Date(_tableClass.DATE_END,false);
+				VENC_.value					= gnncDate.__string2Date(_tableClass.DATE_START,false).date;
+				__setDateRight();
+				
+				//clear parcels
+				__financialPartClear();
+				
+				//set events
+				FINANCIAL_PART_				.addEventListener(gnncEventGeneral._edit,__financialPartChangeDate);
+				VALUE_						.addEventListener(TextOperationEvent.CHANGE,__financialPartClear);
+				
+				//start e focus
+				callLater(__config);
+				callLater(__firstInput);
+			}
+			
+			public function __config():void
+			{
+				student_.addEventListener(gnncEventGeneral._view,__courseClientView);
+			}
+			
+			private function __courseClientView(e:*=null):void
+			{
+				var OBJ:Object				= student_.selectedItem;
+				var IDXDATP:int 			= student_.selectedIndex;
+				var IDXARRA:int 			= _connStudent.DATA_ARR.getItemIndex(OBJ);
+				
+				if(IDXDATP<0)
+				{
+					new gnncAlert().__alert('Selecione um Aluno na listagem.');
+					return;
+				}
+				
+				var _page:viewClient 		= new viewClient();
+				_page._tableClient 		= new table_client(OBJ.ID_CLIENT);
+				
+				new gnncPopUp().__creation(_page);
+			}
+
+			
+			public function __firstInput():void 
+			{ 
+				VALUE_.text = Number(_tableClass.VALUE_IN)==0?'':Number(_tableClass.VALUE_IN).toString();
+				VALUE_.setFocus();
+			}
+			
+			private function __close():void
+			{
+				new gnncPopUp().__close(this);
+			}
+			
+			private function __setDateRight():void
+			{
+				if(DATE_END_.text.length > 7)
+				{
+					DATE_END_.text 				= gnncDate.__setRightDateString(DATE_END_.text,'D-M-Y','D-M-Y','/');
+					DATE_END_.selectedDate 		= gnncDate.__string2Date(gnncDate.__setRightDateString(DATE_END_.text,'D-M-Y','Y-M-D','-'),true);
+				}
+				
+				if(DATE_START_.text.length > 7)
+				{
+					DATE_START_.text 			= gnncDate.__setRightDateString(DATE_START_.text,'D-M-Y','D-M-Y','/');
+					DATE_START_.selectedDate 	= gnncDate.__string2Date(gnncDate.__setRightDateString(DATE_START_.text,'D-M-Y','Y-M-D','-'),true);
+				}
+				
+				__financialPartClear();
+				
+				if(gnncDate.__isValid(DATE_START_.selectedDate) && gnncDate.__isValid(DATE_END_.selectedDate))
+					PART_.value = DateUtils.dateDiff(DateUtils.MONTH,DATE_START_.selectedDate,DATE_END_.selectedDate)+1;
+			}
+			
+			private function __save():void
+			{
+				var _indx:uint 	= FINANCIAL_PART_.dataProvider.length;
+				var _sql:String = '';
+				var _obj:Object;
+
+				if(!_indx)
+				{
+					new gnncAlert().__alert('É necessário gerar no mínimo 1 (uma) parcela.');
+					return;
+				}
+				
+				_gnncPopUp.__loading('Cadastrando parcelas...');
+				
+				for(var i:uint=0; i<_indx; i++)
+				{
+					_obj		= new Object();
+					_obj 		= FINANCIAL_PART_.dataProvider.getItemAt(i);
+					delete 		_obj.ITEM_NUMBER;
+					delete 		_obj.NAME_CLIENT;
+					_obj._TABLE = 'COURSE_PARCEL';
+					
+					_sql += new gnncSql().__INSERT(_obj)+gnncGlobalStatic._breakSql;
+				}
+				
+				//new gnncAlert().__alert(_sql);
+				
+				_connParcel.__sql(_sql,'','',__fResult,__fFault);
+				
+				function __fResult(e:*):void
+				{
+					_gnncPopUp.__close();
+					_change = true;
+					__close();
+				}
+				
+				function __fFault(e:*):void
+				{
+					_gnncPopUp.__close();
+				}
+				
+			}
+			
+			private function __financialPartClear(e:*=null):void
+			{
+				VALUE_TOTAL_.text 				= '';
+				FINANCIAL_PART_.dataProvider 	= new ArrayCollection();
+				LABEL_PART_.visible 			= false; 
+				_gnncPopUp.__center				(this);
+			}
+			
+			private function __financialPart(multiplic_:Boolean):void
+			{
+				if(gnncDataNumber.__safeClear(VALUE_.text)<=0){
+					new gnncAlert().__error('É preciso que o valor seja maior que R$ 0,00.');
+					return;
+				}
+
+				if(DATE_END_.selectedDate == null || DATE_START_.selectedDate == null){
+					new gnncAlert().__error('É necessário selecionar as datas de início e términa.');
+					return;
+				}
+
+				if(PART_.value < 1){
+					new gnncAlert().__error('É necessário ao menos 1 (uma) parcela.'+"\nClique em Multiplicar Valor ou Dividir Valor.");
+					return;
+				}
+				
+				var _arrayCPart:ArrayCollection = new ArrayCollection();
+				var _value:Number 				= (multiplic_)?Number(VALUE_.text):Number(Number(Number(VALUE_.text)/PART_.value).toFixed(2));
+				var _sql:String 				= '';
+				var i:uint 						= 0;
+				
+				//students
+				var e:uint = 0;
+				var lenStudents:uint = student_.dataProvider.length;
+				var idStudent:uint = 0;
+
+				for(e=0; e < lenStudents; e++)
+				{
+					idStudent = student_.dataProvider.getItemAt(e).ID_CLIENT;
+					
+					for(i=1; i <= PART_.value; i++)
+					{
+						var _table:Object			= new Object();
+						
+						_table.ITEM_NUMBER 			= i;
+						_table.ID_CLIENT 			= idStudent;
+						_table.ID_PROJECT 			= _idCouse;
+						_table.VALUE_IN				= multiplic_ ? Number(VALUE_.text) : Number(VALUE_.text)/PART_.value;
+						
+						var _dateE:Date				= gnncData.__clone(DATE_START_.selectedDate) as Date;
+						_dateE.date					= uint(VENC_.value);
+						_dateE.month				= Number(_dateE.month+i)-1;
+						_table.DATE_END				= (DATE_START_.text.length!=10)	?'0000-00-00 00:00:00':gnncDate.__date2String(_dateE,false);
+						
+						_arrayCPart.addItem				(_table);
+					}
+				}
+				
+				new table_course_parcel();
+				
+				VALUE_TOTAL_.text 				= gnncDataNumber.__safeReal(Number(_value * PART_.value));
+				FINANCIAL_PART_.dataProvider 	= _arrayCPart;
+				LABEL_PART_.visible 			= true;
+				_gnncPopUp.__center				(this);
+			}
+			
+			private function __financialPartChangeDate(e:gnncEventGeneral):void
+			{
+				//CHANGE
+				//new gnncAlert().__alert(e.data.ITEM_NUMBER+'<');
+				var _indx:uint		= e.data.ITEM_NUMBER as uint;
+				var _object:Object 	= FINANCIAL_PART_.dataProvider.getItemAt(_indx-1);
+				_object.DATE_END	= e.data.DATE_END;
+				FINANCIAL_PART_.dataProvider.setItemAt(_object,_indx-1);
+				
+				for(var i:uint=e.data.ITEM_NUMBER as uint; i<=FINANCIAL_PART_.dataProvider.length; i++)
+				{
+					_indx				= e.data.ITEM_NUMBER as uint;
+					_object				= FINANCIAL_PART_.dataProvider.getItemAt(_indx-1);
+					_object.DATE_END	= e.data.DATE_END;
+					FINANCIAL_PART_.dataProvider.setItemAt(_object,_indx-1);
+					
+				}
+			}
+			
+			private function __oneParcel():void
+			{
+				dateEndField_.enabled = PART_.enabled = !oneParcel_.selected;
+				
+				if(oneParcel_.selected)
+					PART_.value = 1;
+				else
+					__setDateRight();
+			}
+			
+			private function __courseSelected():void
+			{
+				var _page:selectCourse = new selectCourse();
+				
+				new gnncPopUp().__creation(_page,false,true,__fRemove);
+				//var _gnncPopUp:gnncPopUp = new gnncPopUp();
+				//_gnncPopUp.__creation(_page,false,true,__fRemove);
+				
+				function __fRemove(e:*):void
+				{
+					if(!_page._idCourse){
+						btnStart_.setStyle("skinClass", skin_buttonBlue);
+						__clearAll(true,true,true,true);
+						return;
+					}
+					
+					btnStart_.setStyle("skinClass", skin_button);
+					
+					__clearAll(false,true,true,true);
+					_idCouse = _page._idCourse;
+					_nameCourse = _page._nameCourse;
+					courseName_.text = gnncData.__firstLetterUpperCase(_page._nameCourse);
+					courseTeacher_.text = gnncData.__firstLetterUpperCase(_page._nameTeacherTheMan);
+					VALUE_.text = gnncDataNumber.__safeReal(_page._price,2,'');
+					
+					DATE_END_.selectedDate = gnncDate.__string2Date(_page._dateEnd);
+					DATE_START_.selectedDate = gnncDate.__string2Date(_page._dateStart);
+					
+					__setDateRight();
+					__courseStudentList(_page._idCourse);
+				}
+			}
+			
+			private function __courseStudentList(idCourse_:uint):void
+			{
+				_gnncPopUp.__loading();
+				
+				var _sql:String = " select s.*, \n" +
+					
+					" ( select c.ENROLLMENT 	from dbd_client as c WHERE c.ID = s.ID_CLIENT	) as ENROLLMENT, \n" +
+					" ( select c.ACTIVE 		from dbd_client as c WHERE c.ID = s.ID_CLIENT	) as ACTIVE_CLIENT, \n" +
+					" ( select c.NAME 			from dbd_client as c where c.ID = s.ID_CLIENT  	) as NAME_STUDENT \n" +		//
+					
+					" from dbd_course_student s where s.ID_PROJECT = '"+idCourse_+"' ORDER BY NAME_STUDENT ASC ";
+				
+				//new gnncAlert().__alert(idCourse_+'-1');
+				//new gnncAlert().__alert(_sql+'-2');
+				
+				_connStudent.__sql(_sql,'','',__fResult,__fFault);
+				
+				function __fResult(e:*):void
+				{
+					_gnncPopUp.__close();
+					
+					if(_connStudent.DATA_ROWS==0)
+						return;
+
+					student_.dataProvider = _connStudent.DATA_ARR;
+				}
+				
+				function __fFault(e:*):void
+				{
+					_gnncPopUp.__close();
+				}
+				
+			}
+			
+			private function __clearAll(courseBoo_:Boolean,studentBoo_:Boolean,parcelBoo_:Boolean,parcelPayBoo_:Boolean):void
+			{
+				if(courseBoo_)
+				{
+					courseTeacher_.text = '';
+					courseName_.text 	= '';
+					_idCouse = 0;
+					_nameCourse = '';
+				}
+				
+				if(studentBoo_)
+					student_.dataProvider = new ArrayCollection();
+				
+				//change button color
+				if(courseBoo_ && studentBoo_ && parcelBoo_ && parcelPayBoo_)
+					btnStart_.setStyle("skinClass", skin_buttonBlue);
+				
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<elements:elementStageBoxPopUp />
+	<elements:elementLabelFont id="titlePopUp_" text="GERAR MENSALIDADES" fontSize="9" fontWeight="normal" left="1" top="6" right="1" textAlign="center" color="0x555555"/>
+	
+	<mx:ViewStack id="panelCenter_" left="20" right="20" top="55" bottom="52">
+		<s:NavigatorContent label="BÁSICO" width="100%" >
+			<s:layout>
+				<s:VerticalLayout gap="5"/>
+			</s:layout>
+			
+			<s:Form width="100%" height="227" fontSize="11" fontWeight="normal" focusedTextSelectionColor="0xBCCEFF">
+				<s:layout>
+					<s:FormLayout gap="-10" paddingBottom="0" paddingLeft="0" paddingRight="0" paddingTop="0" />
+				</s:layout>
+
+				<s:FormItem label="Turma">
+					<s:layout>
+						<s:HorizontalLayout gap="1" verticalAlign="middle"/>
+					</s:layout>
+					
+					<s:Button label="Selecionar a Turma" id="btnStart_" click="{__courseSelected()}" 				fontWeight="bold" height="25" icon="{gnncEmbedBlackWhite.bw_course_16}" 			skinClass="GNNC.skin.button.skin_buttonBlue" />
+					<s:Button label="Limpar Dados" 						click="{__clearAll(true,true,true,true)}" 	width="25"   fontWeight="bold" height="25" icon="{gnncEmbedBlackWhite.bw_clear_14_selection}" 	enabled="{student_.dataProvider.length?true:false}" />
+					
+					<s:VGroup gap="0" width="100%" paddingLeft="10">
+						<s:Label id="courseName_" text="" fontSize="11" fontWeight="bold" width="100%" maxDisplayedLines="1" showTruncationTip="true"/>
+						<s:Label id="courseTeacher_" text="" fontSize="10" fontWeight="normal" width="100%" maxDisplayedLines="1" showTruncationTip="true" color="0x777777" />
+					</s:VGroup>
+
+				</s:FormItem>
+				
+				<elements:elementHLine height="20" alpha=".5" />
+
+				<s:FormItem label="Valor (R$)" >
+					<s:TextInput id="VALUE_" text="0,00" height="25" fontSize="14" fontWeight="normal" width="90" 
+								 
+								 color="0xffffff"
+								 borderColor="{0x009900}"
+								 contentBackgroundColor="{0x009900}"
+								 
+								 keyUp="{gnncDataNumber.__safeKeyEvent(event,true)}" 
+								 keyDown="{gnncDataNumber.__safeKeyEvent(event,true)}"
+								 restrict="[0-9][\.\,]" paddingLeft="7" maxChars="11" />
+					<s:Label id="VALUE_SHOW_" text="" color="0x009900" fontWeight="bold" paddingLeft="10" fontSize="12" height="25" verticalAlign="middle"/>
+				</s:FormItem>
+								
+				<s:FormItem label="Primeira (Parcela)">
+
+					<gnncDateField4:gnncDateField4 id="DATE_START_" autoShowDropDown="false" width="92" height="25" showToday="false" 
+												   yearNavigationEnabled="true" 
+												   change="{__setDateRight()}" focusOut="{__setDateRight()}"
+												   editable="false" formatString="DD/MM/YYYY" firstDayOfWeek="0" restrict="[0-9]\\\/." 
+												   focusAlpha="0" showErrorSkin="false" showErrorTip="false" />
+					
+					<s:Label text="{gnncDate.__date2Legend('',DATE_START_.selectedDate,true,false,'')}" paddingLeft="10" />
+
+					<s:Rect width="100%"/>
+					
+					<s:ToggleButton id="oneParcel_" label="Gerar apenas 1 (uma) parcela" selected="false" click="{__oneParcel()}" fontWeight="bold" height="25"/>
+
+				</s:FormItem>
+				<s:FormItem label="Última (Parcela)" id="dateEndField_">
+
+					<gnncDateField4:gnncDateField4 id="DATE_END_" autoShowDropDown="false" width="92" height="25" showToday="false" 
+												   yearNavigationEnabled="true" 
+												   change="{__setDateRight()}" focusOut="{__setDateRight()}"
+												   editable="false" formatString="DD/MM/YYYY" firstDayOfWeek="0" restrict="[0-9]\\\/." 
+												   focusAlpha="0" showErrorSkin="false" showErrorTip="false" />
+					
+					<s:Label text="{gnncDate.__date2Legend('',DATE_END_.selectedDate,true,false,'')}" paddingLeft="10" />
+
+				</s:FormItem>
+				<s:FormItem label="Dia do Vencimento">
+					<s:NumericStepper id="VENC_" value="15" minimum="1" maximum="31" width="90" height="25" textAlign="center" change="{__financialPartClear()}" fontSize="12" fontWeight="bold" />
+				</s:FormItem>
+				
+				<elements:elementHLine height="20" alpha=".5" />
+
+				<s:FormItem label="Parcela(s):">
+					<s:layout>
+						<s:HorizontalLayout gap="1"/>
+					</s:layout>
+					<s:NumericStepper id="PART_" value="0" minimum="0" maximum="50" width="90" height="25" textAlign="center" change="{__financialPartClear()}" fontSize="12" fontWeight="bold" />
+					<s:Button label="Multiplicar valor" height="25" click="{__financialPart(true)}" enabled="{PART_.value?true:false}" skinClass="GNNC.skin.button.skin_buttonBlue" />
+					<s:Button label="Dividir valor" height="25" click="{__financialPart(false)}" enabled="{PART_.value?true:false}"/>
+				</s:FormItem>
+			</s:Form>
+			
+			<s:Rect height="30"/>
+			
+			<s:List id="student_" dataProvider="{new ArrayCollection()}" width="100%" height="100%" minHeight="60" horizontalScrollPolicy="off" borderVisible="true" 
+					itemRenderer="GNNC.modules.course.itemRender.itemRender_courseStudent_forList"
+					contentBackgroundAlpha="0">
+				<s:layout>
+					<s:VerticalLayout rowHeight="25" gap="0"/>
+				</s:layout>
+			</s:List>
+
+			
+			<s:List id="FINANCIAL_PART_" width="100%" height="100%" minHeight="60"> 
+				<s:layout>
+					<s:VerticalLayout rowHeight="25" gap="0"/>
+				</s:layout>
+				<s:itemRenderer>
+					<fx:Component>
+						<s:ItemRenderer height="25" width="100%" autoDrawBackground="true" creationComplete="{__start()}">
+							<fx:Script>
+								<![CDATA[
+									import GNNC.data.data.gnncData;
+									import GNNC.data.data.gnncDataNumber;
+									import GNNC.data.date.gnncDate;
+									import GNNC.event.gnncEventGeneral;
+									import GNNC.gnncEmbedBlackWhite;
+									import GNNC.gnncEmbedImage;
+									
+									private function __start():void
+									{
+										DATE_END_.setStyle('border-visible',0);
+										DATE_END_.setStyle('borderVisible',0);
+										DATE_END_.setStyle('border-alpha',0);
+										DATE_END_.setStyle('borderAlpha',0);
+										DATE_END_.setStyle('content-background-alpha',0);
+										DATE_END_.setStyle('contentBackgroundAlpha',0);
+										DATE_END_.setStyle('padding-bottom',1);
+										DATE_END_.setStyle('paddingBottom',1);
+									}
+									
+									private function __changeDate(data_:Object):void
+									{
+										//chage date
+										__dispatche(gnncEventGeneral._edit);
+									}
+									
+									private function __dispatche(send_:String):void
+									{
+										//data.ITEM_NUMBER
+										data.DATE_END = gnncDate.__date2String(DATE_END_.selectedDate,false);
+										Object(owner).dispatchEvent(new gnncEventGeneral(send_,data));
+									}
+									
+								]]>
+							</fx:Script>
+							
+							<s:states>
+								<s:State name="normal" />
+								<s:State name="hovered" />
+								<s:State name="selected" />
+								<s:State name="normalAndShowsCaret"/>
+								<s:State name="hoveredAndShowsCaret"/>
+								<s:State name="selectedAndShowsCaret"/>
+							</s:states>
+							
+							<s:Rect left="0" top="0" right="0" bottom="0" alpha=".4" includeIn="selectedAndShowsCaret,selected">
+								<s:fill>
+									<s:SolidColor color="0xDDDDDD"/>
+								</s:fill>
+							</s:Rect>
+							
+							<s:Rect width="27" top="0" bottom="0">
+								<s:fill>
+									<s:SolidColor color="0xEEEEEE"/>
+								</s:fill>
+							</s:Rect>
+							<elements:elementVLine left="27"/>
+							
+							<s:HGroup left="2" top="1" right="2" bottom="2" gap="1" verticalAlign="middle">
+								<s:Label textAlign="center" text="{String(itemIndex+1)}" width="25" fontSize="11" fontWeight="bold"  />
+								<s:Rect width="4"/>
+								<s:Image source="{gnncEmbedBlackWhite.bw_financial_16_safe}" toolTip="Parcela"/>
+								<s:Rect width="1"/>
+
+								<gnncDateField4:gnncDateField4 id="DATE_END_" selectedDate="{gnncDate.__string2Date(data.DATE_END)/*__changeDate(data)*/}" height="20" width="20" formatString="DD/MM/YYYY" editable="false" errorString="" showErrorTip="false" showErrorSkin="false" change="{__changeDate(data)}" toolTip="Clique para mudar a data" />
+								<s:Label text="{gnncDate.__date2Legend(data.DATE_END,null,true,false,'-')}" fontSize="11" fontWeight="normal" width="75" maxDisplayedLines="1" showTruncationTip="true" paddingLeft="5" />
+								
+								<s:Label text="{data.VALUE_IN?gnncDataNumber.__safeReal(data.VALUE_IN,2):''}"  width="70" maxDisplayedLines="1" showTruncationTip="true" color="0x009900" paddingLeft="5" fontWeight="bold"/>
+
+								<s:Image source="{gnncEmbedBlackWhite.bw_client_16}" toolTip="{'Cliente ID: '+data.ID_CLIENT}"/>
+								<s:Label text="{gnncData.__firstLetterUpperCase(data.NAME_CLIENT)}" fontSize="11" fontWeight="bold" width="100%" maxDisplayedLines="1" showTruncationTip="true" />
+							</s:HGroup>
+							
+							<elements:elementHLine bottom="0" left="0" right="0" alpha=".5"/>
+						</s:ItemRenderer>
+					</fx:Component>
+				</s:itemRenderer>
+			</s:List>
+		</s:NavigatorContent>
+	</mx:ViewStack>
+	
+	<s:HGroup left="1" right="1" bottom="1" height="34" gap="2" paddingLeft="5" paddingRight="5" verticalAlign="middle">
+		<s:Label id="VALUE_TOTAL_" fontSize="12" fontWeight="bold" paddingLeft="7" />
+		<s:Label id="LABEL_PART_" text=" (total das parcelas)" fontSize="11" fontWeight="bold" paddingLeft="7" color="0x777777" />
+		<s:Rect width="100%" />
+		<s:Button id="BTN_SAVE_" icon="{gnncEmbedBlackWhite.bw_new_16}" label="Cadastrar Parcelas" click="{__save()}" fontWeight="bold" height="30" enabled="{Number(VALUE_.text)==0?false:true}" keyUp="{__save()}" />
+		<s:Button icon="{gnncEmbedBlackWhite.app_close_16_clean}" label="Fechar" click="{__close()}" skinClass="GNNC.skin.button.skin_buttonLink" height="30" />	
+	</s:HGroup>
+	
+	<s:Button top="4" right="4" click="{__close()}" width="10" height="10" tabFocusEnabled="false" toolTip="Fechar" />
+	
+</s:Module>

@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  
+		  width="750" height="550"
+		  creationComplete="{__start()}" 
+		  
+		  xmlns:stage="GNNC.elements.stage.*" 
+		  xmlns:component="GNNC.elements.component.*" 
+		  xmlns:select="GNNC.elements.component.select.*" xmlns:elements="GNNC.UI.elements.*" 
+		  
+		  >
+	<fx:Declarations>
+		<s:CurrencyFormatter id="PRICE_" 
+							 currencySymbol="R$ " 
+							 useCurrencySymbol="true"
+							 negativeCurrencyFormat="2"
+							 positiveCurrencyFormat="0"
+							 decimalSeparator=","
+							 groupingSeparator="."
+							 errorText="Erro no valor!"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import GNNC.UI.gnncAlert.gnncAlert;
+			import GNNC.UI.gnncPopUp.gnncPopUp;
+			import GNNC.data.data.gnncData;
+			import GNNC.data.data.gnncDataNumber;
+			import GNNC.data.date.DateUtils;
+			import GNNC.data.date.gnncDate;
+			import GNNC.data.sql.gnncSql;
+			import GNNC.data.conn.gnncAMFPhp;
+			import GNNC.event.gnncEventGeneral;
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.gnncEmbedImage;
+			import GNNC.keyboard.gnncKeyboard;
+			import GNNC.sqlTables.table_client;
+			import GNNC.sqlTables.table_course_parcel;
+			import GNNC.sqlTables.table_course_parcel_pay;
+			import GNNC.sqlTables.table_financial;
+			
+			import mx.collections.ArrayCollection;
+			
+			import spark.events.TextOperationEvent;
+			
+			private var _connFinancial:gnncAMFPhp 				= new gnncAMFPhp();
+			private var _connExec:gnncAMFPhp 					= new gnncAMFPhp();
+			private var _gnncPopUp:gnncPopUp 					= new gnncPopUp();
+			
+			public var _tableClass:table_course_parcel_pay 		= new table_course_parcel_pay();
+			public var _change:Boolean 							= false;
+			
+			//return to value selected
+			public var _valuePay:Number							= 0;
+			
+			private function __start():void
+			{
+				__financialList();
+			}
+			
+			private function __close():void
+			{
+				new gnncPopUp().__close(this);
+			}
+
+			private function __financialList():void
+			{
+				if(!_tableClass.ID_CLIENT)
+				{
+					new gnncAlert().__alert('');
+					__close();
+					return;
+				}
+				
+				_gnncPopUp.__loading();
+				
+				list_.enabled = false;
+				bar_.enabled = false;
+				
+				var _columns:Array = 
+					[
+						"*",
+						"(select NAME 		from dbd_client 			where dbd_client.ID like ID_CLIENT													) as NAME_CLIENT",
+						"(select NAME 		from dbd_group 				where dbd_group.ID like ID_GROUP													) as NAME_GROUP",
+						"(select NAME 		from dbd_departament 		where dbd_departament.ID like ID_DEPARTAMENT										) as NAME_DEPARTAMENT",
+						"(select NAME 		from dbd_financial_account 	where dbd_financial_account.ID like ID_FINANCIAL_ACCOUNT							) as NAME_FINANCIAL_ACCOUNT",
+						"(select COUNT(ID) 	from dbd_attach 			where dbd_attach.MIX like 'FINANCIAL' AND dbd_attach.ID_MIX like dbd_financial.ID	) as ROWS_ATTACH"
+					];
+				
+				//No FINANCIAL_TRANS
+				var _where:Array = [" VALUE_IN > 0 AND VALUE_OUT = 0 AND DATE_CANCELED like '0000-00-00 00:00:00' AND DATE_FINAL <> '0000-00-00 00:00:00' AND MIX like 'FINANCIAL' "];
+				
+				var _table:table_financial = new table_financial();
+				_table.ID_CLIENT = _tableClass.ID_CLIENT;
+				
+				//var _order:Array = ['ID,NUMBER_LETTER,NUMBER'];
+				var _order:Array = ['DATE_END,DATE_START,ID'];
+
+				var _sql:String = new gnncSql().__SELECT(_table,false,_columns,null,null,_where,null,_order,true);
+				
+				//new gnncAlert().__textArea(_sql+'<');
+				
+				_connFinancial.__sql(_sql,'','',__fResult,__fFault);
+				
+				function __fResult(e:*):void
+				{
+					list_.dataProvider = _connFinancial.DATA_ARR;
+					list_.enabled = true;
+					bar_.enabled = true;
+					_gnncPopUp.__close();
+				}
+
+				function __fFault(e:*):void
+				{
+					list_.dataProvider = new ArrayCollection();
+					list_.enabled = true;
+					bar_.enabled = true;
+					_gnncPopUp.__close();
+				}
+
+			}
+			
+			private function __save():void
+			{
+				var OBJ:Object				= list_.selectedItem;
+				var IDXDATP:int 			= list_.selectedIndex;
+				var IDXARRA:int 			= _connFinancial.DATA_ARR.getItemIndex(OBJ);
+				
+				if(IDXDATP < 0)
+				{
+					new gnncAlert().__alert('Selecione um Pagamento na listagem.');
+					return;
+				}
+
+				_gnncPopUp.__loading('Checando dados...');
+
+				var _table:table_course_parcel_pay = new table_course_parcel_pay();
+				_table.ID_CLIENT 			= _tableClass.ID_CLIENT;
+				_table.ID_PROJECT 			= _tableClass.ID_PROJECT;
+				_table.ID_FINANCIAL 		= OBJ.ID;
+				
+				var _sql:String = new gnncSql().__SELECT(_table);
+
+				//new gnncAlert().__alert('>'+_sql)
+
+				_connExec.__sql(_sql,'','',__fResult,__fFault);
+				
+				function __fResult(e:*):void
+				{
+					if(!_connExec.DATA_ROWS)
+					{
+						_gnncPopUp.__loading();
+						__savePay();
+					}
+					else
+					{
+						new gnncAlert().__error("O pagamento selecionado já está anexado ao Cliente e a Turma.\nTente outro pagamento para continuar.");
+						_gnncPopUp.__close();
+					}
+						
+				}
+				
+				function __fFault(e:*):void
+				{
+					_gnncPopUp.__close();
+				}
+
+			}
+
+			private function __savePay():void
+			{
+				var OBJ:Object				= list_.selectedItem;
+				var IDXDATP:int 			= list_.selectedIndex;
+				var IDXARRA:int 			= _connFinancial.DATA_ARR.getItemIndex(OBJ);
+				
+				if(IDXDATP < 0)
+				{
+					new gnncAlert().__alert('Selecione um Pagamento na listagem.');
+					return;
+				}
+				
+				var _table:table_course_parcel_pay = new table_course_parcel_pay();
+				_table.ID_CLIENT 			= _tableClass.ID_CLIENT;
+				_table.ID_PROJECT 			= _tableClass.ID_PROJECT;
+				_table.ID_COURSE_PARCEL 	= _tableClass.ID_COURSE_PARCEL;
+				_table.ID_FINANCIAL 		= OBJ.ID;
+				
+				//new gnncAlert().__alert('1>'+_tableClass.ID_COURSE_PARCEL)
+				
+				var _sql:String = new gnncSql().__INSERT(_table,false,false,false);
+				
+				//new gnncAlert().__alert('2>'+_sql)
+				
+				_connExec.__sql(_sql,'','',__fResult,__fFault);
+				
+				function __fResult(e:*):void
+				{
+					
+					_valuePay = Number(OBJ.VALUE_IN_PAY);
+					
+					_gnncPopUp.__close();
+					_change = true;
+					__close();
+				}
+				
+				function __fFault(e:*):void
+				{
+					_gnncPopUp.__close();
+				}
+				
+			}
+			
+			private function __financialIn():void
+			{
+				var _table:table_financial 		= new table_financial();
+				_table.VALUE_IN  				= _valuePay;
+				_table.ID_CLIENT 				= _tableClass.ID_CLIENT;
+
+				var _page:newFinancial 			= new newFinancial();
+				_page._safeIn 					= true;
+				_page._tableFinancial 			= _table;
+
+				new gnncPopUp().__creation(_page,false,false,__fRemove);
+
+				function __fRemove(e:*):void
+				{
+					if(!_page._change)
+						return;
+					
+					__financialList();
+				}
+			}
+
+		]]>
+	</fx:Script>
+	
+	<elements:elementStageBoxPopUp />
+	<elements:elementLabelFont id="titlePopUp_" text="ANEXAR PAGAMENTO" fontSize="9" fontWeight="normal" left="1" top="6" right="1" textAlign="center" color="0x555555"/>
+
+	<mx:ViewStack id="panelCenter_" left="20" right="20" top="55" bottom="52">
+		<s:NavigatorContent label="BÁSICO" width="100%" >
+			<s:layout>
+				<s:VerticalLayout gap="5"/>
+			</s:layout>
+			
+			<s:HGroup width="100%" gap="1" id="bar_">
+				
+				<s:Button icon="{gnncEmbedBlackWhite.bw_financial_16_safe_in}" label="Receita (Cadastrar Pagamento)" fontWeight="bold" click="{__financialIn()}"/>
+				<s:Rect width="100%"/>
+				<s:Button icon="{gnncEmbedBlackWhite.bw_calendar_16}" 		label="Mês atual" fontWeight="bold" enabled="false"/>
+				<s:Button icon="{gnncEmbedBlackWhite.bw_financial_16_safe}" label="Ano atual" enabled="false"/>
+				<s:Button icon="{gnncEmbedBlackWhite.bw_all_16}" 			label="Todos os lançamentos" enabled="false"/>
+				
+			</s:HGroup>
+			
+			<s:List id="list_" width="100%" height="100%" itemRenderer="GNNC.modules.financial.itemRender.itemRender_financial_forList" 
+					horizontalScrollPolicy="off"> 
+				<s:layout>
+					<s:VerticalLayout rowHeight="25" gap="0"/>
+				</s:layout>
+			</s:List>
+			
+			<s:HGroup width="100%" height="25" gap="3" verticalAlign="middle">
+				
+				<s:Image source="{gnncEmbedBlackWhite.bw_description_16}" toolTip="Descrição" width="16" height="16"/>
+				<s:Label text="{ list_.selectedIndex > -1 ? gnncData.__firstLetterUpperCase(list_.selectedItem.DESCRIPTION) : '' }" fontWeight="bold" width="100%" paddingLeft="2" color="0x000000" showTruncationTip="true" maxDisplayedLines="1"/>
+			
+			</s:HGroup>
+
+		</s:NavigatorContent>
+	</mx:ViewStack>
+	
+	<s:HGroup left="1" right="1" bottom="1" height="34" gap="2" paddingLeft="5" paddingRight="5" verticalAlign="middle">
+		<s:Label text="Selecione um lançamento acima e clique em anexar pagamento." width="100%" paddingLeft="4"/>
+		<s:Rect width="1" />
+		<s:Button id="BTN_SAVE_" icon="{gnncEmbedBlackWhite.bw_ok_16}" label="Anexar Pagamento" click="{__save()}" fontWeight="bold" height="25" enabled="{list_.dataProvider.length?true:false}" keyUp="{__save()}" />
+		<s:Button icon="{gnncEmbedBlackWhite.app_close_16_clean}" label="Fechar" click="{__close()}" skinClass="GNNC.skin.button.skin_buttonLink" height="25" />	
+	</s:HGroup>
+	
+	<s:Button top="4" right="4" click="{__close()}" width="10" height="10" tabFocusEnabled="false" toolTip="Fechar" />
+	
+</s:Module>

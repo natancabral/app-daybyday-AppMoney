@@ -1,0 +1,408 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  
+		  width="550" height="400" 
+		  creationComplete="{__start()}" 
+		  
+		  xmlns:stage		= "GNNC.elements.stage.*" 
+		  xmlns:component	= "GNNC.elements.component.*" 
+		  xmlns:select		= "GNNC.elements.component.select.*" 
+		  xmlns:elements="GNNC.UI.elements.*" 
+		  >
+	<fx:Declarations>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import GNNC.UI.gnncAlert.gnncAlert;
+			import GNNC.UI.gnncPopUp.gnncPopUp;
+			import GNNC.data.data.gnncData;
+			import GNNC.data.data.gnncDataArrayCollection;
+			import GNNC.data.globals.gnncGlobalArrays;
+			import GNNC.data.globals.gnncGlobalStatic;
+			import GNNC.data.permission.gnncPermission;
+			import GNNC.data.sql.gnncSql;
+			import GNNC.data.conn.gnncAMFPhp;
+			import GNNC.gnncEmbedBank;
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.gnncEmbedImage;
+			import GNNC.keyboard.gnncKeyboard;
+			import GNNC.sqlTables.table_financial_account;
+			
+			import mx.collections.ArrayCollection;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			
+			import spark.events.IndexChangeEvent;
+			
+			private var _connFinancialAccount:gnncAMFPhp = new gnncAMFPhp();
+			public var _tableFinancialAccount:table_financial_account = new table_financial_account();
+			public var _gnncPopUp:gnncPopUp = new gnncPopUp();
+			public var _change:Boolean = false;
+			
+			private function __start():void
+			{
+				this.addEventListener(KeyboardEvent.KEY_UP,
+					function(event:KeyboardEvent):void
+					{
+						if(gnncKeyboard.__ENTER(event))
+						{
+							focusManager.getNextFocusManagerComponent().setFocus();
+							focusManager.getNextFocusManagerComponent().drawFocus(true);
+							
+							focusManager.showFocus();
+							focusManager.getFocus();
+							focusManager.activate();
+						}
+						if(gnncKeyboard.__CONTROL_ENTER(event)) __save();
+					}
+				);
+				
+				__listBankSimple();
+				__check();
+				callLater(__firstInput);
+				callLater(__permissions);
+			}
+			
+			public function __firstInput():void 
+			{ 
+				this.NAME_.setFocus();
+			}
+			
+			public function __permissions():void 
+			{ 
+				if(!gnncPermission.__access('account-allow-negative','a'))
+					ALLOW_NEGATIVE_.enabled = false;
+			}
+
+			private function __check():void
+			{
+				if(_tableFinancialAccount != null)
+				{
+					if(_tableFinancialAccount.ID)
+					{
+						_gnncPopUp.__loading('Recolhendo dados...');
+						var _sql:String = new gnncSql().__SELECT(new table_financial_account(_tableFinancialAccount.ID));
+						_connFinancialAccount.__sql(_sql,'','',__fResultCheck,__fFaultCheck);
+					}
+				} 
+				else 
+				{
+					_tableFinancialAccount = new table_financial_account();
+				}
+			}
+			
+			protected function __fFaultCheck(event:*):void
+			{
+				gnncPopUp.__close();
+				__close();
+			}
+			
+			protected function __fResultCheck(event:*):void
+			{
+				gnncPopUp.__close();
+				
+				if(!_connFinancialAccount.DATA_ROWS)
+				{
+					new gnncAlert().__alert('Informações não encontradas!');
+					__close();
+					return;
+				}
+				
+				var _obj:Object					= _connFinancialAccount.DATA_ARR.getItemAt(0);
+				
+				_tableFinancialAccount.ID		= _tableFinancialAccount.ID;
+				NAME_.text						= _obj.NAME;
+				ACCOUNT_TYPE_.selectedIndex		= new gnncDataArrayCollection().__getIndex(gnncGlobalArrays._FINANCIAL_ACCOUNT_TYPE,'data',_obj.ACCOUNT_TYPE);
+
+				ALLOW_NEGATIVE_.selected        = Number(_obj.ALLOW_NEGATIVE)>0? true : false ;
+
+				AGENCY_NUMBER_.text				= Number(_obj.AGENCY_NUMBER)>0?_obj.AGENCY_NUMBER:'';
+				AGENCY_DIGIT_.text				= Number(_obj.AGENCY_DIGIT)>0?_obj.AGENCY_DIGIT:'';
+				
+				DAY_CLOSE.selectedIndex			= int(_obj.DAY_CLOSE)-1;
+				DAY_PAY.selectedIndex			= int(_obj.DAY_PAY)-1;
+				
+				ACCOUNT_NUMBER_.text			= Number(_obj.ACCOUNT_NUMBER)>0?_obj.ACCOUNT_NUMBER:'';
+				ACCOUNT_DIGIT_.text				= Number(_obj.ACCOUNT_DIGIT)>0?_obj.ACCOUNT_DIGIT:'';
+				
+				COLOR_.value					= _obj.COLOR;
+				DESCRIPTION_.text				= _obj.DESCRIPTION;
+				
+				/** OTHERS **/
+				
+				bankNumber_.text 				= _obj.BANK;
+				//bankList_.selectedIndex 		= new gnncDataArrayCollection().__getIndex(gnncGlobalArrays._FINANCIAL_BANK,'data',_obj.BANK);
+				
+				btnSave_.label 					= 'Salvar Edição';
+				btnSave_.setStyle				('icon',gnncEmbedBlackWhite.bw_edit_16);
+			}
+			
+			private function __close():void
+			{
+				new gnncPopUp().__close(this);
+			}
+			
+			private function __save():void
+			{
+				if(!NAME_.text){
+					NAME_.setFocus();
+					return;
+				}
+				if(!ACCOUNT_TYPE_.selectedIndex<0){
+					ACCOUNT_TYPE_.setFocus();
+					ACCOUNT_TYPE_.openDropDown();
+					return;
+				}
+				
+				/*if(!NAME_.text || ACCOUNT_TYPE_.selectedIndex<0)
+				{
+					new gnncAlert().__alert('O nome e o tipo de conta são obrigatórios.');
+					return;
+				}*/
+				
+				_gnncPopUp.__loading();
+				
+				var _table:table_financial_account = new table_financial_account();
+				
+				gnncData.__scapeText(null,[NAME_,DESCRIPTION_]);
+				
+				_table.ID					= _tableFinancialAccount.ID;
+				_table.NAME 				= NAME_.text.toUpperCase();
+				_table.ACCOUNT_TYPE 		= (ACCOUNT_TYPE_.selectedIndex>-1)?ACCOUNT_TYPE_.selectedItem.data:'';
+				
+				_table.ALLOW_NEGATIVE       = ALLOW_NEGATIVE_.selected == true ? 1 : 0 ;
+				
+				_table.BANK 				= bankList_.selectedIndex < 0 ? '' : bankList_.selectedItem.data;
+				
+				_table.AGENCY_NUMBER	 	= AGENCY_NUMBER_.text;
+				_table.AGENCY_DIGIT 		= AGENCY_DIGIT_.text;
+				
+				//date credit card
+				if(ACCOUNT_TYPE_.selectedIndex != 0)
+				{
+					DAY_CLOSE.selectedIndex = -1;
+					DAY_PAY.selectedIndex 	= -1;
+				}
+				
+				_table.DAY_CLOSE			= DAY_CLOSE.selectedIndex + 1;
+				_table.DAY_PAY				= DAY_PAY.selectedIndex + 1;
+				
+				_table.ACCOUNT_NUMBER 		= ACCOUNT_NUMBER_.text;
+				_table.ACCOUNT_DIGIT 		= ACCOUNT_DIGIT_.text;
+				
+				_table.COLOR 				= COLOR_.value;
+				_table.DESCRIPTION 			= DESCRIPTION_.text;
+				
+				var _sql:String 			= new gnncSql().__INSERT(_table,false,true,true);
+				
+				_connFinancialAccount.__sql			(_sql,'','',__fResult,__fFault);
+				
+				function __fFault(e:*):void
+				{
+					gnncPopUp.__close();
+				}
+				
+				function __fResult(e:*):void
+				{
+					_change = true;
+					gnncPopUp.__close();
+					__close();
+				}
+			}
+			
+			private function __listBankSimple():void
+			{
+				var c:ArrayCollection = gnncGlobalArrays._financialBankSimple;
+				var n:ArrayCollection = new ArrayCollection();
+				var o:Object = new Object();
+				
+				for( var i:uint=0; i<c.length; i++ )
+				{
+					//gnncGlobalArrays._financialBankSimple
+					o 			= c.getItemAt(i);
+					o.ico 		= gnncEmbedBank[c.getItemAt(i).image+'_16'];
+					o.toolTip 	= c.getItemAt(i).label;
+					o.a 		= '';
+					n.addItemAt	(o,i);
+				}
+				
+				bankSimple_.width			= 275;
+				bankSimple_.iconField 		= 'ico';
+				bankSimple_.labelField		= 'a';
+				bankSimple_.dataProvider 	= n;
+				bankSimple_.addEventListener(IndexChangeEvent.CARET_CHANGE,__selectBankSimple);
+			}
+			
+			private function __selectBankSimple(e:*=null):void
+			{
+				var c:ArrayCollection 		= gnncGlobalArrays._financialBankSimple;
+				var idx:int 				= bankSimple_.selectedIndex;
+				
+				if(idx < 0)
+				{
+					__selectBankClear();
+					return;
+				}
+				
+				var a:Array 				= new Array();
+				var o:Object 				= c.getItemAt(idx);
+				
+				bankNumber_.text 			= o.data;
+				bankSimpleLabel_.text 		= o.label;
+				
+				//bankList_.selectedIndex 	= new gnncDataArrayCollection().__getIndex(gnncGlobalArrays._FINANCIAL_BANK,'data',bankNumber_.text);;
+				bankSimple_.selectedIndex 	= idx;
+				
+			}
+			
+			private function __selectBank():void
+			{
+				if(bankList_.selectedIndex < 0)
+					return;
+				
+				//bank
+				bankNumber_.text = bankList_.selectedItem.data;
+				//bank simple
+				bankSimple_.selectedIndex 	= new gnncDataArrayCollection().__getIndex(gnncGlobalArrays._financialBankSimple,'data',bankNumber_.text);
+			}
+			
+			private function __selectBankNumber():void
+			{
+				if(bankNumber_.text.length < 3)
+					return;
+				
+				//bank
+				bankList_.selectedIndex 	= new gnncDataArrayCollection().__getIndex(gnncGlobalArrays._FINANCIAL_BANK,'data',bankNumber_.text);
+				//bank simple
+				bankSimple_.selectedIndex 	= new gnncDataArrayCollection().__getIndex(gnncGlobalArrays._financialBankSimple,'data',bankNumber_.text);
+			}
+			
+			private function __selectBankClear():void
+			{
+				bankSimple_.selectedIndex 	= -1;
+				bankSimpleLabel_.text		= '';
+				
+				bankList_.selectedIndex		= -1; 
+				bankNumber_.text			= '';
+			}
+			
+			private function __changeAccountType():void
+			{
+				if(ACCOUNT_TYPE_.selectedIndex<0)
+					return;
+				
+				var typ:String = ACCOUNT_TYPE_.selectedItem.data;
+				
+				if(typ == 'CCOFRE' || typ == 'DINHEI')
+				{
+					bankFormItem_.visible = false;
+					bankList_.selectedIndex = -1;
+				}
+				else
+				{
+					bankFormItem_.visible = true;
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<elements:elementStageBoxPopUp/>
+	<elements:elementLabelFont id="titlePopUp_" text="CONTA FINANCEIRA" fontSize="9" fontWeight="normal" left="1" top="6" right="1" textAlign="center" color="0x555555"/>
+	
+	<!-- s:HGroup gap="2" verticalAlign="middle" height="40" left="10" top="10" right="10">
+	<s:Image source="{gnncEmbedImage.FINANCIAL_ACCOUNT_32}" /> 
+	<elements:elementLabelFont id="titlePopUp_" text="CONTA" fontSize="24" fontWeight="normal" height="32" paddingLeft="10" />
+	</s:HGroup -->
+	
+	<s:HGroup left="20" right="20" top="20" height="30" verticalAlign="middle" paddingLeft="0" paddingRight="0">
+		<s:TabBar dataProvider="{panelCenter_}" height="30" />
+	</s:HGroup>
+	
+	<mx:ViewStack id="panelCenter_" left="20" right="20" top="55" bottom="52">
+		<s:NavigatorContent label="BÁSICO" width="100%" height="100%" creationPolicy="all">
+			<s:Form width="100%" height="100%" fontSize="11" fontWeight="normal">
+				<s:layout>
+					<s:FormLayout gap="-10" paddingBottom="0" paddingLeft="0" paddingRight="0" paddingTop="0" />
+				</s:layout>
+				<s:FormItem label="Nome">
+					<s:TextInput id="NAME_" width="100%" height="30" fontSize="15" paddingLeft="5" prompt="Nome para Identificação" />
+				</s:FormItem>
+				<s:FormItem label="Tipo de Conta">
+					<s:DropDownList id="ACCOUNT_TYPE_" dataProvider="{gnncGlobalArrays._FINANCIAL_ACCOUNT_TYPE}" width="200" height="25" prompt="Selecione..." change="{__changeAccountType()}" />
+				</s:FormItem>
+				<elements:elementHLine height="25" />
+				<s:FormItem label="Datas do Cartão" visible="{ACCOUNT_TYPE_.selectedIndex==0?true:false}">
+					<s:Label text="Dia de Vencimento" height="25" verticalAlign="middle"/>
+					<s:DropDownList id="DAY_PAY" width="50" height="25" dataProvider="{gnncGlobalArrays._days}" selectedIndex="0" />
+					<s:Label text="Dia de Fechamento" height="25" verticalAlign="middle"/>
+					<s:DropDownList id="DAY_CLOSE" width="50" height="25" dataProvider="{gnncGlobalArrays._days}" selectedIndex="0" />
+				</s:FormItem>
+				<elements:elementHLine height="25" />
+				<s:FormItem label="Banco" id="bankFormItem_" width="100%" >
+					<s:Group width="100%" height="25">
+						<s:HGroup width="100%" height="25" visible="{!showSimpleBank_.selected?false:true}" verticalAlign="middle">
+							<s:ButtonBar id="bankSimple_" height="25" />
+							<s:Label  id="bankSimpleLabel_" text="Nenhum" paddingLeft="5" fontSize="12"/>
+						</s:HGroup> 
+						<s:HGroup width="100%" height="25" visible="{showSimpleBank_.selected?false:true}" verticalAlign="middle">
+							<s:ComboBox id="bankList_" labelField="label" dataProvider="{gnncGlobalArrays._FINANCIAL_BANK}" width="200" height="25" prompt="Selecione..." change="{__selectBank()}" itemRenderer="GNNC.skin.dropDownList.itemRender.itemRender_hierarchy_forList"/>
+							<s:TextInput id="bankNumber_" width="45" height="25" maxChars="3" restrict="[0-9]" keyUp="{__selectBankNumber()}" updateComplete="{__selectBankNumber()}" change="{__selectBankNumber()}" prompt="000" />
+							<s:Button icon="{gnncEmbedImage.CLEAR_16_SELECTION}" toolTip="Limpar seleção..." width="25" height="25" click="{__selectBankClear()}" skinClass="GNNC.skin.button.skin_buttonLink"/>
+						</s:HGroup> 
+					</s:Group>
+				</s:FormItem>
+				<s:FormItem label="Agência" visible="{bankList_.selectedIndex > -1 ? true : false}">
+					<s:TextInput id="AGENCY_NUMBER_" width="90" height="25" maxChars="10" restrict="[0-9]" />
+					<s:Label text="-" fontWeight="bold"/>
+					<s:TextInput id="AGENCY_DIGIT_" width="25" height="25" maxChars="1" restrict="[0-9]" textAlign="center" />
+				</s:FormItem>
+				<s:FormItem label="Número da Conta" visible="{bankList_.selectedIndex>-1}">
+					<s:TextInput id="ACCOUNT_NUMBER_" width="90" height="25" maxChars="10" restrict="[0-9]" />
+					<s:Label text="-" fontWeight="bold"/>
+					<s:TextInput id="ACCOUNT_DIGIT_" width="25" height="25" maxChars="1" restrict="[0-9]" textAlign="center" />
+				</s:FormItem>
+			</s:Form>
+		</s:NavigatorContent>
+		<s:NavigatorContent label="DESCRIÇÃO" width="100%" height="100%" autoLayout="true" creationPolicy="all" >
+			<s:Form width="100%" height="100%" fontSize="11" fontWeight="normal">
+				<s:layout>
+					<s:FormLayout gap="-10" paddingBottom="0" paddingLeft="0" paddingRight="0" paddingTop="0" />
+				</s:layout>
+				<s:FormItem label="Cor">
+					<select:conColor id="COLOR_" />
+				</s:FormItem>
+				<elements:elementHLine height="25" />
+				<s:FormItem label="{'Observações ('+(300-uint(DESCRIPTION_.text.length))+')'}" width="100%" >
+					<s:TextArea id="DESCRIPTION_" width="100%" height="120" maxChars="300" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10"/>
+				</s:FormItem>
+				<s:FormItem label="Saldo" width="100%" >
+				<s:CheckBox id="ALLOW_NEGATIVE_" selected="false" label="Permite saldo negativo na conta" toolTip="Controle de Cartão de Crédito ou Cheque Especial do banco" />
+				</s:FormItem>
+			</s:Form>
+		</s:NavigatorContent>
+	</mx:ViewStack>
+	
+	<s:HGroup left="1" right="1" bottom="1" height="34" gap="2" paddingLeft="10" paddingRight="5" verticalAlign="middle">
+		
+		<s:CheckBox id="showSimpleBank_" label="Visualizar os principais bancos" selected="true" />
+		
+		<s:Rect width="100%" />
+		<s:Button id="btnSave_" icon="{gnncEmbedBlackWhite.bw_new_16}" label="Cadastrar" click="{__save()}" fontWeight="bold" >
+			<s:keyDown>
+				<![CDATA[
+				if( gnncKeyboard.__ENTER(event) && !gnncKeyboard.__CONTROL_ENTER(event) ) 
+				__save()
+				]]>
+			</s:keyDown>
+		</s:Button>
+		<s:Button icon="{gnncEmbedBlackWhite.app_close_16_clean}" label="Fechar" click="{__close()}" skinClass="GNNC.skin.button.skin_buttonLink" />	
+		
+	</s:HGroup>
+	
+	<s:Button top="4" right="4" click="{__close()}" width="10" height="10" tabFocusEnabled="false" toolTip="Fechar" />
+	
+</s:Module>

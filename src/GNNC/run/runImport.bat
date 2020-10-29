@@ -1,0 +1,1 @@
+scan\App\NAPS2.Console.exe naps2.console -i %1 -n 0 -o %2 --pdftitle "GNNC DayByDay Document" --pdfauthor "GNNC Estrategia Empresarial" --pdfsubject "www.gnnc.com.br" --pdfkeywords "documents num...1..2..3..4" --force -v

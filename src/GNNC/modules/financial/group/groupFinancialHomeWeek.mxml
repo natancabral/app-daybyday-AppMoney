@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:stage="GNNC.elements.stage.*"
+		 width="100%" height="50" xmlns:component="GNNC.elements.component.*" 
+		 >
+	<fx:Declarations>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import GNNC.gnncEmbedBlackWhite;
+			
+			public function set _source(e:Object):void
+			{
+				//img.source = e;
+			}
+			
+			public function set _rowsIn(e:String):void
+			{
+				rowsIn.text = e;
+			}
+
+			public function set _rowsOut(e:String):void
+			{
+				rowsOut.text = e;
+			}
+
+			public function set _label(e:String):void
+			{
+				label.text = e;
+			}
+
+		]]>
+	</fx:Script>
+		
+	<s:Rect width="100%" height="100%" radiusX="3">
+		<s:fill>
+			<s:SolidColor color="0xFFFFFF"/>
+		</s:fill>
+	</s:Rect>
+
+	<elements:elementLabelFont id="label" text="..." height="30" verticalCenter="-1" fontSize="13" fontWeight="normal" left="10" right="40" verticalAlign="middle" lineHeight="8" maxDisplayedLines="2" showTruncationTip="true"/>
+
+	<elements:elementVLine right="60" top="5" bottom="5" width="1"/>
+	<s:Image id="img" source="{gnncEmbedBlackWhite.check_16_bw}" right="40" verticalCenter="0" width="16" height="16"/>
+	<elements:elementVLine right="40" top="5" bottom="5" width="1"/>
+	<elements:elementLabelFont id="rowsIn" text="0" height="25" width="20" right="20" top="5" bottom="5" fontSize="12" fontWeight="normal" textAlign="center" verticalAlign="middle"
+							 color="0xcc0000" />
+	<elements:elementVLine right="20" top="5" bottom="5" width="1"/>
+	<elements:elementLabelFont id="rowsOut" text="0" height="25" width="20" right="0" top="5" bottom="5" fontSize="12" fontWeight="normal" textAlign="center" verticalAlign="middle"
+							 color="0x009900" />
+
+</s:Group>

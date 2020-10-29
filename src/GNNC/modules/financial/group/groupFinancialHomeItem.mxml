@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:stage="GNNC.elements.stage.*"
+		 width="100%" height="50" 
+		 mouseOver="{__mouseOver(event)}"
+		 mouseOut="{__mouseOut(event)}"
+		 resize="{__resize()}" xmlns:elements="GNNC.UI.elements.*"
+		 >
+	<fx:Declarations>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import GNNC.data.data.gnncDataNumber;
+
+			public function set _color(e:uint):void
+			{
+				value.setStyle('color',e);
+			}
+
+			public function set _source(e:Object):void
+			{
+				img.source = e;
+			}
+			
+			public function set _rows(e:String):void
+			{
+				//rows.text = e;
+			}
+
+			public function set _label(e:String):void
+			{
+				label.text = e;
+			}
+
+			public function set _valueSafe(e:Number):void
+			{
+				value.text = gnncDataNumber.__safeReal(e,2,'');
+			}
+
+			public function __mouseOut(e:*=null):void
+			{
+				img.alpha = 0.3;
+			}
+			
+			public function __mouseOver(e:*=null):void
+			{
+				img.alpha = 1;
+			}
+			
+			public function __resize():void
+			{
+				if(this.width < 100)
+				{
+					img.visible = line.visible = false;
+					value.left = label.left = 10;
+				}
+				else
+				{
+					img.visible = line.visible = true;
+					value.left = label.left = 45;
+				}
+			}
+			
+		]]>
+	</fx:Script>
+		
+	<s:Rect width="100%" height="100%" radiusX="3">
+		<s:fill>
+			<s:SolidColor color="0xFFFFFF"/>
+		</s:fill>
+	</s:Rect>
+
+	<s:Image id="img" left="10" verticalCenter="0" alpha="0.3" />
+	<elements:elementVLine id="line" left="35" top="5" bottom="5" width="1"/>
+	<!-- s:Label id="rows" text="0" height="25" width="30" right="0" top="5" bottom="5" fontSize="11" fontWeight="normal" textAlign="center" verticalAlign="middle"/-->
+	
+	<s:Label id="value" text="R$ 0,00" height="30" bottom="14" fontSize="12" fontWeight="bold"   left="45" right="10" verticalAlign="middle" lineHeight="8" maxDisplayedLines="1" showTruncationTip="true"  />
+	<s:Label id="label" text="Metas"   height="30" bottom="0"  fontSize="10" fontWeight="normal" left="45" right="10" verticalAlign="middle" lineHeight="8" maxDisplayedLines="1" showTruncationTip="true" color="0x777777"/>
+
+
+</s:Group>

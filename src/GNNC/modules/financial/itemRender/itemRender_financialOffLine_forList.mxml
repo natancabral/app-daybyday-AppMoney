@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:ItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+				xmlns:s="library://ns.adobe.com/flex/spark" 
+				xmlns:mx="library://ns.adobe.com/flex/mx" 
+				autoDrawBackground="false"  
+				height="25" width="100%" minWidth="500"
+				>
+	<fx:Script>
+		<![CDATA[
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.data.data.gnncData;
+			import GNNC.data.date.gnncDate;
+			
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="normal" />
+		<s:State name="hovered" />
+		<s:State name="selected" />
+		<s:State name="normalAndShowsCaret"/>
+		<s:State name="hoveredAndShowsCaret"/>
+		<s:State name="selectedAndShowsCaret"/>
+	</s:states>
+	
+	<s:Rect left="0" top="0" right="0" bottom="0" includeIn="selected,selectedAndShowsCaret" alpha=".95">
+		<s:fill>
+			<s:LinearGradient rotation="90">
+				<s:GradientEntry color="0x3785e2"/>
+				<s:GradientEntry color="0x2170cf"/>
+			</s:LinearGradient>
+		</s:fill>
+	</s:Rect>
+	
+	<s:HGroup left="2" top="0" right="0" bottom="0" gap="2" verticalAlign="middle" color.selected="0xFFFFFF" color.selectedAndShowsCaret="0xFFFFFF">
+		<s:Image source="{gnncEmbedBlackWhite.bw_financial_16_safe}" toolTip="{'Lançamento ID: '+data.ID}"/>
+		<s:Label text="{gnncDate.__date2Legend(data.DATE_END,null,false,false,'-')}" fontSize="11" fontWeight="normal" width="55" maxDisplayedLines="1" showTruncationTip="true" paddingLeft="6" />
+		<s:Group width="50">
+			<s:Label text="{data.VALUE_IN?Number(data.VALUE_IN).toFixed(2).replace('.',','):''}"  width="50" maxDisplayedLines="1" showTruncationTip="true" color="0x009900" color.selected="0x33ff00" color.selectedAndShowsCaret="0x33ff00" paddingLeft="2" fontWeight="bold" toolTip="{'Receber: R$ '+Number(data.VALUE_IN).toFixed(2)}"/>
+			<s:Label text="{data.VALUE_OUT?Number(data.VALUE_OUT).toFixed(2).replace('.',','):''}" width="50" maxDisplayedLines="1" showTruncationTip="true" color="0xcc0000" color.selected="0xffff00" color.selectedAndShowsCaret="0xffff00" paddingLeft="2" fontWeight="bold" toolTip="{'Pagar: R$ '+Number(data.VALUE_OUT).toFixed(2)}"/>
+		</s:Group>
+		<s:Label text="{gnncData.__firstLetterUpperCase(data.DESCRIPTION)}" fontSize="11" fontWeight="normal" width="100%" maxDisplayedLines="1" showTruncationTip="true" />
+	</s:HGroup>
+	
+</s:ItemRenderer>

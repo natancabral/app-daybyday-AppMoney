@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module 
+	xmlns:fx="http://ns.adobe.com/mxml/2009" 
+	xmlns:s="library://ns.adobe.com/flex/spark" 
+	xmlns:mx="library://ns.adobe.com/flex/mx" 
+	
+	width="400" height="400"
+	
+	creationComplete="{__start()}" 
+	
+	xmlns:select="GNNC.elements.component.select.*" 
+	xmlns:stage="GNNC.elements.stage.*" 
+	xmlns:component="GNNC.elements.component.*" 
+	xmlns:gnncTextEdit="GNNC.UI.gnncTextEdit.*" 
+	xmlns:gnncDateField4="GNNC.UI.gnncDateField4.*" xmlns:elements="GNNC.UI.elements.*" 
+	>
+	<fx:Script>
+		<![CDATA[
+			import GNNC.UI.gnncAlert.gnncAlert;
+			import GNNC.UI.gnncPopUp.gnncPopUp;
+			import GNNC.data.data.gnncData;
+			import GNNC.data.data.gnncDataHtml;
+			import GNNC.data.data.gnncDataRand;
+			import GNNC.data.date.gnncDate;
+			import GNNC.data.globals.gnncGlobalStatic;
+			import GNNC.data.sql.gnncSql;
+			import GNNC.data.conn.gnncAMFPhp;
+			import GNNC.data.file.gnncFilePdf;
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.gnncEmbedImage;
+			import GNNC.keyboard.gnncKeyboard;
+			import GNNC.sqlTables.table_financial;
+			import GNNC.sqlTables.table_note;
+			
+			import mx.rpc.Fault;
+			import mx.rpc.events.ResultEvent;
+			
+			private var _connNote:gnncAMFPhp = new gnncAMFPhp();
+			public  var _tableFinancial:table_financial	= new table_financial();
+			private var _gnncPopUp:gnncPopUp = new gnncPopUp();
+			
+			private const _MIX:String = 'FINANCIAL_NOTE';
+			
+			public var _change:Boolean = false;
+			
+			private function __start():void
+			{
+				this.addEventListener(KeyboardEvent.KEY_UP,
+					function(event:KeyboardEvent):void
+					{
+						if(gnncKeyboard.__CONTROL_ENTER(event)) __save();
+					}
+				);
+				
+				__refreshDate();
+				__checkEdit();
+				callLater(__firstInput);
+			}
+			
+			public function __firstInput():void 
+			{ 
+				MESSAGE_.setFocus();
+			}
+			
+			private function __checkEdit():void
+			{
+				if(_tableFinancial != null)
+				{
+					if(Number(_tableFinancial.ID)>0)
+					{
+						_gnncPopUp.__loading	('Recolhendo dados...');
+						var _sql:String 		= new gnncSql().__SELECT(new table_financial(_tableFinancial.ID));
+						_connNote.__sql			(_sql,'','',__fResultCheck,__fFaultCheck);
+					}
+				} 
+				else 
+				{
+					_tableFinancial = new table_financial();
+				}
+			}
+			
+			protected function __fFaultCheck(e:*):void
+			{
+				_gnncPopUp.__close();
+			}
+			
+			protected function __fResultCheck(e:*):void
+			{
+				if(!_connNote.DATA_ROWS)
+					return;
+				
+				var _object:Object 				= _connNote.DATA_ARR.getItemAt(0);
+				
+				_tableFinancial.ID				= _object.ID;
+				_tableFinancial.ID_KEY          = _object.ID_KEY;
+				
+				client_.value                   = _object.ID_CLIENT;
+				MESSAGE_.text					= _object.DESCRIPTION;
+				DATE_END_.selectedDate			= gnncDate.__string2Date(_object.DATE_END);
+				
+				_gnncPopUp.__close();
+			}
+			
+			private function __close():void
+			{
+				new gnncPopUp().__close(this);
+			}
+			
+			private function __save():void
+			{
+				if(!MESSAGE_.text && DATE_END_.selectedDate != null){
+					new gnncAlert().__alert('A nota e a data são obrigatórias.');
+					return
+				}
+
+				_tableFinancial.ID_KEY = _tableFinancial.ID_KEY ? _tableFinancial.ID_KEY : gnncDataRand.__key();
+				
+				_gnncPopUp.__loading();
+				gnncData.__scapeText([],[MESSAGE_]);
+				
+				var _object:table_financial	= new table_financial();
+				
+				_object.ID			= _tableFinancial.ID;
+				_object.MIX			= _MIX;
+				_object.ID_KEY      = _tableFinancial.ID_KEY;
+				_object.ID_CLIENT   = client_.value;
+				_object.DESCRIPTION	= MESSAGE_.text; //Description in List
+				_object.DATE_END	= gnncDate.__date2String(DATE_END_.selectedDate);
+				
+				var _sql:String 			= new gnncSql().__INSERT(_object,false,true,true);
+				_connNote.__sql	(_sql,'','',__fResult,__fFault);
+			}
+			
+			protected function __fResult(e:*):void
+			{
+				_change 			= true;
+				_gnncPopUp.__close	();
+				__close				();
+			}
+			
+			protected function __fFault(e:*):void
+			{
+				_gnncPopUp.__close();
+			}
+
+			protected function __printer():void
+			{
+				var a:gnncFilePdf	= new gnncFilePdf();
+				a._document_3_type	= "Nota - Financeiro";
+				a.__addPage();
+				
+				a.__setFontStyle	(16);
+				a.__addCellInLine	("Anotação no Dia "+gnncDate.__date2Legend('',DATE_END_.selectedDate),"C",18,0,0);
+				
+				a.__setFontStyle	(a._normalFontSize);
+				a.__addTextHtml		(gnncDataHtml.__textFlow2FlashHtml(MESSAGE_.textFlow));
+				
+				a.__saveDesktop		("dayBayDay - "+gnncGlobalStatic._programName+" - Nota - Financeiro");
+			}
+
+			private function __refreshDate():void
+			{
+				dateFinalButtun_.label = gnncDate.__date2Legend('',DATE_END_.selectedDate);
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+	</fx:Declarations>
+	
+	<elements:elementStageBoxPopUp />
+	<elements:elementLabelFont id="titlePopUp_" text="ANOTAÇÕES" fontSize="9" fontWeight="normal" left="1" top="6" right="1" textAlign="center" color="0x555555"/>
+	
+	<mx:ViewStack id="panelCenter_" top="20" left="20" right="20" bottom="52">
+		<s:NavigatorContent label="" width="100%" height="100%" creationPolicy="all">
+			<s:layout>
+				<s:VerticalLayout gap="1" />
+			</s:layout>
+			
+			<s:Group width="100%" height="100%">
+				<s:TextArea id="MESSAGE_" width="100%" height="100%" fontSize="12" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="15" 
+							borderVisible="false" focusAlpha="0" maxChars="400"/>
+				<s:Rect left="0" top="0" right="0" height="5" radiusX="0" radiusY="0">	
+					<s:fill>
+						<s:LinearGradient rotation="83">
+							<s:GradientEntry color="0xffd547" />
+							<s:GradientEntry color="0xffd547" />
+						</s:LinearGradient>
+					</s:fill>
+				</s:Rect>	
+			</s:Group>
+			
+			<select:conSelect_CLIENT id="client_" _ADD="false" _ADDQUICK="false" height="30" width="100%"/>
+			
+		</s:NavigatorContent>
+	</mx:ViewStack>
+	
+	<s:HGroup width="100%" height="34" gap="2" verticalAlign="middle" paddingLeft="4" paddingRight="4" bottom="0">
+
+		<s:Label paddingLeft="5" paddingRight="5" fontWeight="bold" text="{'('+Number(400-MESSAGE_.text.length)+')'}" 
+				 height="25" width="100%" verticalAlign="middle" />
+
+		<s:Group height="25" width="110">
+			<s:Button id="dateFinalButtun_" label="" width="100%" height="25" icon="{gnncEmbedBlackWhite.bw_calendar_16}" click="{SHOW_CALENDAR_.displayPopUp=!SHOW_CALENDAR_.displayPopUp}" fontWeight="normal" />
+			<s:PopUpAnchor id="SHOW_CALENDAR_" popUpPosition="below" displayPopUp="false" top="25">
+				<mx:DateChooser id="DATE_END_" width="180" height="180" fontSize="11" selectedDate="{new Date()}" showToday="true" borderColor="0xCCCCCC"  
+								change="{__refreshDate();/*__financialList(FINANCIAL_CALENDAR_.selectedDate);*/ SHOW_CALENDAR_.displayPopUp = false;}" rollOut="{SHOW_CALENDAR_.displayPopUp = false}" 
+								borderVisible="true" firstDayOfWeek="0" yearNavigationEnabled="true" />
+			</s:PopUpAnchor>
+		</s:Group>
+		<s:Button icon="{gnncEmbedBlackWhite.bw_printer_16}" label="Imprimir anotação" click="{__printer()}" fontWeight="bold" width="25" />
+		<s:Button icon="{gnncEmbedBlackWhite.bw_new_16}" label="{'Cadastrar'}" click="{__save()}" fontWeight="bold" />
+		<s:Button icon="{gnncEmbedBlackWhite.app_close_16_clean}" label="Fechar" click="{__close()}" skinClass="GNNC.skin.button.skin_buttonLink" />
+	</s:HGroup>
+	
+	<s:Button top="10" right="10" click="{__close()}" width="10" height="10" tabFocusEnabled="false" toolTip="Fechar" />
+	
+</s:Module>

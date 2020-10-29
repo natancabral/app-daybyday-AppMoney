@@ -1,0 +1,489 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  width="100%" height="100%"
+		  creationComplete="{__start()}" xmlns:stage="GNNC.elements.stage.*" xmlns:component="GNNC.elements.component.*" xmlns:select="GNNC.elements.component.select.*" 
+		  >
+	<fx:Declarations>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import GNNC.UI.gnncAlert.gnncAlert;
+			import GNNC.UI.gnncPopUp.gnncPopUp;
+			import GNNC.data.data.gnncData;
+			import GNNC.data.data.gnncDataArrayCollection;
+			import GNNC.data.globals.gnncGlobalStatic;
+			import GNNC.data.sql.gnncSql;
+			import GNNC.data.conn.gnncAMFPhp;
+			import GNNC.elements.component.select.report.gnncFileReport_series;
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.gnncEmbedImage;
+			import GNNC.keyboard.gnncKeyboard;
+			import GNNC.sqlTables.table_group;
+			import GNNC.sqlTables.table_web_menu_location;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.IVisualElement;
+			import mx.events.CloseEvent;
+			
+			[Bindable] private var _gnncGlobal:gnncGlobalStatic 		= new gnncGlobalStatic(true);
+			[Bindable] public var _tableClass:Object 					= null;
+			
+			public  var _connList:gnncAMFPhp 							= new gnncAMFPhp();
+			private var _connExec:gnncAMFPhp 							= new gnncAMFPhp();
+			private var _gnncPopUp:gnncPopUp 							= new gnncPopUp();
+			
+			public  var _MIX:String 									= 'SERIES';
+			public  var _change:Boolean 								= false;
+			
+			private function __start():void
+			{
+				__config();
+				callLater(__firstInput);
+			}
+			
+			private function __config():void 
+			{
+				_tableClass = new table_group();
+				_MIX		= _tableClass.MIX;
+				
+				callLater(__list,[false]);
+				callLater(__showFix);
+			}
+			
+			private function __firstInput():void 
+			{ 
+				this.NAME_.setFocus();
+			}
+
+			private function __showFix():void 
+			{ 
+				fFixo.visible = (_tableClass['_TABLE']=='GROUP'?true:false);
+			}
+
+			private function __close():void
+			{
+				new gnncPopUp().__close(IVisualElement(owner));
+			}
+			
+			private function __documentPdf():void
+			{
+				var title:String = '';
+				
+				switch(_tableClass['_TABLE'])
+				{
+					case 'DEPARTAMENT': 	title = 'Centro de Custo (Departamentos)'; break;
+					case 'GROUP': 			title = 'Grupos'; 							break;
+					case 'CATEGORY': 		title = 'Categorias'; 						break;
+					case 'SERIES': 		
+					default:				title = 'Séries';
+				}
+
+				switch(_MIX)
+				{
+					case 'FINANCIAL_IN': 
+					case 'FINANCIAL_OUT': 
+						title = 'Plano de Contas (Grupos)'; break;
+				}
+
+				var _object:Object 		= new Object();
+				_object['arrayC'] 		= new ArrayCollection(list_.dataProvider.toArray());
+				_object['MIX'] 			= _MIX;
+				_object['TABLE'] 		= _tableClass['_TABLE'];
+				_object['title'] 		= title;
+				
+				new gnncFileReport_series().__create(_object);
+			}
+			
+			public function __list(sqlRefreshData_:Boolean,fResult_:Function=null,fFault_:Function=null):void
+			{
+				if(!sqlRefreshData_)
+				{
+					switch(_tableClass['_TABLE'])
+					{
+						case 'DEPARTAMENT':
+							_connList.DATA_ARR = _gnncGlobal._DEPARTAMENT.DATA_ARR;
+							list_.dataProvider = new gnncDataArrayCollection().__hierarchyReport(new gnncDataArrayCollection().__filter(_gnncGlobal._DEPARTAMENT.DATA_ARR,'MIX',_MIX,false));
+							break;
+						case 'GROUP':
+							_connList.DATA_ARR = _gnncGlobal._GROUP.DATA_ARR;
+							list_.dataProvider = new gnncDataArrayCollection().__hierarchyReport(new gnncDataArrayCollection().__filter(_gnncGlobal._GROUP.DATA_ARR,'MIX',_MIX,false));
+							break;
+						case 'CATEGORY':
+							_connList.DATA_ARR = _gnncGlobal._CATEGORY.DATA_ARR;
+							list_.dataProvider = new gnncDataArrayCollection().__hierarchyReport(new gnncDataArrayCollection().__filter(_gnncGlobal._CATEGORY.DATA_ARR,'MIX',_MIX,false));
+							break;
+						case 'SERIES':
+							_connList.DATA_ARR = _gnncGlobal._SERIES.DATA_ARR;
+							list_.dataProvider = new gnncDataArrayCollection().__hierarchyReport(new gnncDataArrayCollection().__filter(_gnncGlobal._SERIES.DATA_ARR,'MIX',_MIX,false));
+							break;
+						default:
+							NAME_.text = 'Série não definida.'
+							panelCenter_.enabled = false;
+							return;
+							break;
+					}
+					
+					return;
+				}
+				
+				_gnncPopUp.__loading();
+				
+				function __fResult(e:*):void
+				{ 
+					__list(false);
+					
+					/*switch(_tableClass['_TABLE'])
+					{
+						case 'DEPARTAMENT':
+							list_.dataProvider = new gnncDataArrayCollection().__hierarchy(new gnncDataArrayCollection().__filter(_gnncGlobal._DEPARTAMENT.DATA_ARR,'MIX',_MIX,false));
+							break;
+						case 'GROUP':
+							list_.dataProvider = new gnncDataArrayCollection().__hierarchy(new gnncDataArrayCollection().__filter(_gnncGlobal._GROUP.DATA_ARR,'MIX',_MIX,false));
+							break;
+						case 'CATEGORY':
+							list_.dataProvider = new gnncDataArrayCollection().__hierarchy(new gnncDataArrayCollection().__filter(_gnncGlobal._CATEGORY.DATA_ARR,'MIX',_MIX,false));
+							break;
+						case 'SERIES':
+							list_.dataProvider = new gnncDataArrayCollection().__hierarchy(new gnncDataArrayCollection().__filter(_gnncGlobal._SERIES.DATA_ARR,'MIX',_MIX,false));
+							break;
+					}*/
+
+					//list_.dataProvider = new gnncDataArrayCollection().__hierarchy(new gnncDataArrayCollection().__filter(_connList.DATA_ARR,'MIX',_MIX,false));
+					_gnncPopUp.__close();
+					
+					if(fResult_!=null)
+						fResult_.call();
+				};
+				
+				function __fFault (e:*):void
+				{ 
+					_gnncPopUp.__close();
+					
+					if(fFault_!=null)
+						fFault_.call();
+				};
+				
+				var _table:Object	= new Object();
+				_table._TABLE		= _tableClass['_TABLE']
+				_table.ACTIVE		= _tableClass['ACTIVE']
+				_table.VISIBLE		= _tableClass['VISIBLE']
+				
+				var _sql:String = new gnncSql().__SELECT(_table,false,null,null,null,null,null,['NAME'],false);
+				
+				switch(_tableClass['_TABLE'])
+				{
+					case 'DEPARTAMENT':
+						_gnncGlobal._DEPARTAMENT.__sql	(_sql,'','',__fResult,__fFault);
+						break;
+					case 'GROUP':
+						_gnncGlobal._GROUP.__sql		(_sql,'','',__fResult,__fFault);
+						break;
+					case 'CATEGORY':
+						_gnncGlobal._CATEGORY.__sql		(_sql,'','',__fResult,__fFault);
+						break;
+					case 'SERIES':
+						_gnncGlobal._SERIES.__sql		(_sql,'','',__fResult,__fFault);
+						break;
+					default:
+						_gnncPopUp.__close()
+						break;
+				}
+				
+				//new gnncAlert().__alert(_sql);
+				//_connList.__sql(_sql,'','',__fResult,__fFault);
+			}
+			
+			private function __edit():void
+			{
+				var OBJ:Object					= list_.selectedItem;
+				var IDXDATP:int 				= list_.selectedIndex;
+				var IDXARRA:int 				= _connList.DATA_ARR.getItemIndex(OBJ);
+				
+				if(IDXDATP < 0)
+				{
+					return;
+				}
+				
+				panelLeft_.enabled = false;
+				
+				btnSave_.label 					= 'Salvar Edição (Ctr+Enter)';
+				btnSave_.setStyle				('icon',gnncEmbedBlackWhite.bw_edit_16);
+				
+				_tableClass.ID 					= OBJ.ID;
+				NAME_.text						= OBJ.NAME;
+				ACTIVE_.selected			 	= !OBJ.ACTIVE ? false : true;
+				ID_FATHER_.selectedIndex		= new gnncDataArrayCollection().__getIndex(new ArrayCollection(list_.dataProvider.toArray()),'ID',OBJ.ID_FATHER);
+				_tableClass.LEVEL				= ID_FATHER_.selectedIndex > -1?uint(ID_FATHER_.selectedItem.LEVEL+1):0;
+				COLOR_.value					= OBJ.COLOR;
+				TYPE_FINANCIAL_FIX.selected		= OBJ.TYPE_FINANCIAL_FIX?true:false;
+				
+				NAME_.setFocus();
+			}
+			
+			private function __delete():void
+			{
+				var OBJ:Object					= list_.selectedItem;
+				var IDXDATP:int 				= list_.selectedIndex;
+				var IDXARRA:int 				= _connList.DATA_ARR.getItemIndex(OBJ);
+				
+				if(IDXDATP < 0)
+					return;
+				
+				Alert.show("Você deseja excluir esse item definitivamente?",'Excluir...',3,null,__deleteConfirm);
+				
+			}
+			
+			private function __deleteConfirm(event:CloseEvent):void
+			{
+				if(event.detail != Alert.YES)
+					return;
+				
+				_gnncPopUp.__loading();
+				
+				var OBJ:Object					= list_.selectedItem;
+				var IDXDATP:int 				= list_.selectedIndex;
+				var IDXARRA:int 				= _connList.DATA_ARR.getItemIndex(OBJ);
+				
+				function __fResult(e:*):void
+				{ 
+					_change = true;
+					_gnncPopUp.__close();
+					
+					_connList.DATA_ARR.removeItemAt(IDXARRA);
+					list_.dataProvider.removeItemAt(IDXDATP);
+				};
+				
+				function __fFault(e:*):void
+				{ 
+					_gnncPopUp.__close();
+				};
+				
+				var _sql:String = new gnncSql().__DELETE(_tableClass,[OBJ.ID],true);
+				
+				_sql += gnncGlobalStatic._breakSql+" UPDATE dbd_"+String(_tableClass._TABLE).toLowerCase()+" SET ID_FATHER = '"+OBJ.ID_FATHER+"', LEVEL = '"+OBJ.LEVEL+"' WHERE ID_FATHER like '"+OBJ.ID+"'";
+				
+				//new gnncAlert().__alert(_sql);
+				
+				_connExec.__sql(_sql,'','',__fResult,__fFault);
+			}
+			
+			private function __save():void
+			{
+				if(!gnncData.__trimText(NAME_.text))
+					return;
+				
+				if(ID_FATHER_.selectedIndex>-1)
+					if(_tableClass.ID && ID_FATHER_.selectedItem.ID == _tableClass.ID)
+					{
+						new gnncAlert().__error('Escolha outra sub-categoria.');
+						return;
+					}
+				
+				_gnncPopUp.__loading();
+				
+				var _table:Object 				= new Object();
+				
+				_table._TABLE 					= _tableClass._TABLE;
+				
+				_table.ID 						= _tableClass.ID;
+				_table.ID_FATHER				= ID_FATHER_.selectedIndex > -1?ID_FATHER_.selectedItem.ID:0;
+				_table.LEVEL					= ID_FATHER_.selectedIndex > -1?uint(ID_FATHER_.selectedItem.LEVEL+1):0;
+				
+				_table.MIX						= _MIX;
+				
+				_table.TYPE_FINANCIAL_FIX		= TYPE_FINANCIAL_FIX.selected?1:0;
+				
+				_table.NAME						= gnncData.__scapeString(NAME_.text);
+				_table.DESCRIPTION				= '';//DESCRIPTION_.text;
+				_table.COLOR					= COLOR_.value?COLOR_.value.toString():'';
+				
+				_table.ACTIVE					= ACTIVE_.selected ? 1 : 0;
+				_table.VISIBLE					= 1;
+				_table.CONTROL					= 0;
+				
+				var _sql:String	= _sql = new gnncSql().__INSERT(_table,true,true,true);
+				
+				if(_tableClass.hasOwnProperty('ID'))
+					if(_tableClass.ID)
+						_sql += gnncGlobalStatic._breakSql+" UPDATE dbd_"+String(_tableClass._TABLE).toLowerCase()+" SET LEVEL = '"+uint(_table.LEVEL+1)+"' WHERE ID_FATHER like '"+_table.ID+"'";
+				
+				//new gnncAlert().__alert(_sql);
+				
+				_connExec.__sql(_sql,'','',__fResult,__fFault);
+				
+				function __fFault(event:*):void
+				{
+					_gnncPopUp.__close();
+				}
+				
+				function __fResult(event:*):void
+				{
+					btnSave_.label 					= 'Cadastrar (Ctrl+Enter)';
+					btnSave_.setStyle				('icon',gnncEmbedBlackWhite.bw_new_16);
+					
+					ACTIVE_.selected 				= false;
+					TYPE_FINANCIAL_FIX.selected		= false;
+					COLOR_.value 					= 'FFFFFF';
+					NAME_.text 						= '';
+					NAME_.setFocus					();
+
+					//##
+					panelLeft_.enabled 				= true;
+					_change							= true;
+					_gnncPopUp.__close();
+					//##
+
+					_tableClass.ID 					= 0;
+					_tableClass.LEVEL 				= 0;
+
+					__list(true); //Refresh All
+					
+				}
+				
+			}
+			
+			private function __clearSelections():void
+			{
+				list_.selectedIndex = ID_FATHER_.selectedIndex = -1;
+			}
+			
+			private function __selectedFather(inverse_:Boolean=false):void
+			{
+				if(list_.selectedIndex != ID_FATHER_.selectedIndex)
+					if(inverse_)
+						list_.selectedIndex = ID_FATHER_.selectedIndex;
+					else
+						ID_FATHER_.selectedIndex = list_.selectedIndex;
+			}
+			
+			
+		]]>
+	</fx:Script>
+		
+	<elements:elementBarStatus height="66"/>
+	
+	<s:Scroller height="66" width="100%" verticalScrollPolicy="off" >
+		
+		<s:HGroup gap="2" paddingLeft="3" paddingRight="3" height="100%" verticalAlign="middle" paddingTop="2" paddingBottom="2" mouseOver="{__checkSetAccount()}">
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.bw_financial_32_safe_in}" 		label="Receita" 			iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialNew(true)}"/>
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.bw_financial_32_safe_out}" 		label="Despesa" 			iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialNew(false)}"/>
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.bw_financial_32_safe_trans}" 		label="Transferência" 		iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialTransNew()}"/>
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.bw_course_32_new}" 				label="Curso" 				iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialCourseNew()}" toolTip="Pagamento de Mensalidade - Curso"/>
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.bw_note_32_new}" 					label="Nota" 				iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialNote()}" />
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.bw_financial_32_future}" 			label="Previsão" 			iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialFuture()}" />
+			<elements:elementVLine _COLOR="0xeeeeee" width="3" />
+			<!--s:Button width="63" height="100%" icon="{gnncEmbedImage.FINANCIAL_ACCOUNT_32}" label="Mudar Conta" iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" enabled="false"/-->
+			<s:VGroup gap="1" width="90" height="100%">
+				<s:Button width="100%" height="100%" icon="{gnncEmbedBlackWhite.bw_view_16}" 				label="Visualizar" 			iconPlacement="right" skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialView()}"/>
+				<s:Button width="100%" height="100%" icon="{gnncEmbedBlackWhite.bw_edit_16}" 				label="Editar" 				iconPlacement="right" skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialEdit()}"/>
+			</s:VGroup>
+			<s:VGroup gap="1" width="90" height="100%">
+				<s:Button width="100%" height="100%" icon="{gnncEmbedBlackWhite.bw_attach_16_new}" 			label="Arquivo"				iconPlacement="right" skinClass="GNNC.skin.button.skin_buttonLink" click="{__attachNew()}"/>
+				<s:Button width="100%" height="100%" icon="{gnncEmbedBlackWhite.bw_delete_16}" 				label="Excluir" 			iconPlacement="right" skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialDelete()}"/>
+			</s:VGroup>
+			<elements:elementVLine _COLOR="0xeeeeee" width="3" />
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.check_16_green_ok}" 				label="Baixar" 				iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" toolTip="Baixar / Compensar. Lançar recebimento." click="{__financialDateFinal()}"/>
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.check_16_bw_ok}" 					label="Remover Baixa" 		iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" toolTip="Remover pagamento. Remover baixa do lançamento." click="{__financialDateFinalNo()}"/>
+			<elements:elementVLine _COLOR="0xeeeeee" width="3" />
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.check_16_red_ok}" 				label="Cancelar" 			iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" toolTip="Cancelar lançamento. Lançamento inativo porém visível." click="{__financialDateCanceled()}" />
+			<elements:elementVLine _COLOR="0xeeeeee" width="3" />
+			<s:Button width="63" height="100%" icon="{gnncEmbedImage.RECEIPT_32}" 							label="Recibo" 				iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialReceipt()}"/>
+			<elements:elementVLine _COLOR="0xeeeeee" width="3" />
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.bw_urgent_32}" 					label="Pendente" 			iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialActive(true,0)}" toolTip="Marcar lançamento como pendente. Este marcador não altera o resultado financeiro." />
+			
+			<s:Rect width="100%"/>
+			
+			<!--s:Button width="63" height="100%" icon="{gnncEmbedImage.REFRESH_32}" 						label="Atualizar" 			iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialRefresh()}"/-->
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.bw_calendar_32_today}" 			label="Hoje" 				iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialToday()}"/>
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.bw_calendar_32}" 					label="Mês" 				iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialList()}"/>
+		</s:HGroup>
+		
+	</s:Scroller>
+	
+	<s:Group top="66" bottom="0" width="201">
+		<elements:elementBarGray  width="201" height="100%" alpha=".4"/>	
+	</s:Group>
+	<elements:elementVLine left="201" top="66" bottom="0" _COLOR="0xDDDDDD" />
+	<s:VGroup left="202" right="0" top="66" bottom="0" gap="0">
+		<mx:ViewStack id="panelCenter_" left="20" right="20" top="55" bottom="52" >
+			<s:NavigatorContent label="BÁSICO" width="100%" height="100%">
+				<s:layout>
+					<s:HorizontalLayout gap="5" />
+				</s:layout>
+				
+				<s:Form width="100%" height="100%" fontSize="11" fontWeight="normal">
+					<s:layout>
+						<s:FormLayout gap="-10" paddingBottom="0" paddingLeft="0" paddingRight="0" paddingTop="0" />
+					</s:layout>
+					<s:HGroup width="100%">
+						<elements:elementLabelFont text="NOME" fontSize="16" width="100%" height="30" fontWeight="normal" paddingLeft="5" paddingTop="1" paddingBottom="5" />
+						<select:conColor id="COLOR_" _widthBox="20" _heightBox="20" />
+					</s:HGroup>
+					<elements:elementHLine height="25" alpha=".5" />
+					<s:FormItem label="Sub-Categoria de:">
+						<s:DropDownList id="ID_FATHER_" width="100%" height="25" labelField="NAME" prompt="Selecione..." dataProvider="{list_.dataProvider}" change="{__selectedFather(true)}" />
+						<s:Button icon="{gnncEmbedBlackWhite.bw_clear_14_selection}" width="25" toolTip="Limpar seleção" click="{ID_FATHER_.selectedIndex=-1;list_.selectedIndex=-1;}" skinClass="GNNC.skin.button.skin_buttonLink" />
+					</s:FormItem>
+					<s:FormItem label="Nome" required="true">
+						<!-- edit contentBackgroundColor="{_tableClass.ID?0xffffcc:0xFFFFFF}"  -->
+						<s:TextInput id="NAME_" width="100%" height="30" fontSize="15" paddingLeft="5" prompt="Nome ou Título"
+									 contentBackgroundColor="{_tableClass.ID?0xe0e4ed:0xFFFFFF}"
+									 />
+					</s:FormItem>
+					<s:FormItem label="Chave">
+						<s:layout>
+							<s:VerticalLayout gap="5"/>
+						</s:layout>
+						<s:CheckBox id="ACTIVE_" label="Grupo Chave" height="25" fontSize="13" selected="false" fontWeight="bold"/>
+						<s:Label text="Grupo chave torna desabilitado para seleção." />
+					</s:FormItem>
+					<s:FormItem label="Custo" id="fFixo" >
+						<s:layout>
+							<s:VerticalLayout gap="5"/>
+						</s:layout>
+						<s:CheckBox id="TYPE_FINANCIAL_FIX" label="Custo fixo" height="25" fontSize="13" selected="false" fontWeight="bold"/>
+						<s:Label text="Custos fixos e variáveis" />
+					</s:FormItem>
+				</s:Form>
+				
+				<s:Group id="panelLeft_" width="250" height="100%" top="15">
+					<elements:elementBarGray radiusX="4" width="100%" height="100%" alpha=".5"/>
+					<s:VGroup width="100%" height="100%" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10" gap="1" top="0">
+						<s:List id="list_" width="100%" height="100%" borderVisible="false" labelField="NAME" contentBackgroundAlpha="0" horizontalScrollPolicy="off" 
+								change="{__selectedFather()}" itemRenderer="GNNC.skin.dropDownList.itemRender.itemRender_hierarchy_forList"
+								>
+							<s:layout>
+								<s:VerticalLayout rowHeight="25" gap="1" />
+							</s:layout>
+						</s:List>
+						<elements:elementHLine height="15"/>
+						<s:HGroup width="100%" gap="1">
+							<s:Button toolTip="Atualizar" 	icon="{gnncEmbedBlackWhite.bw_refresh_16}"  width="100%" click="{__list(true)}"/>
+							<s:Button label="Editar" 		icon="{gnncEmbedBlackWhite.bw_edit_16}" 	enabled="{list_.selectedIndex>-1?true:false}" click="{__edit()}"/>
+							<s:Button label="Excluir" 		icon="{gnncEmbedBlackWhite.bw_delete_16}" 	enabled="{list_.selectedIndex>-1?true:false}" click="{__delete()}"/>
+						</s:HGroup>
+					</s:VGroup>
+				</s:Group>
+			</s:NavigatorContent>
+		</mx:ViewStack>
+	</s:VGroup>
+
+	
+	<!-- s:HGroup left="1" right="1" bottom="1" height="34" gap="2" paddingLeft="5" paddingRight="5" verticalAlign="middle">
+		<s:Button icon="{gnncEmbedBlackWhite.bw_document_16_pdf}" label="Documento" click="{__documentPdf()}" focusEnabled="false" />
+		<s:Rect width="100%" />
+		<s:Button id="btnSave_" icon="{gnncEmbedBlackWhite.bw_new_16}" label="Cadastrar (Ctrl+Enter)" click="{__save()}" fontWeight="bold" enabled="{NAME_.text?true:false}" height="25" >
+			<s:keyUp>
+				<![CDATA[
+				if(gnncKeyboard.__ENTER(event) && !gnncKeyboard.__CONTROL_ENTER(event)) __save()
+				]]>
+			</s:keyUp>
+		</s:Button>
+		<s:Button icon="{gnncEmbedBlackWhite.app_close_16_clean}" label="Fechar" click="{__close()}" skinClass="GNNC.skin.button.skin_buttonLink" />	
+	</s:HGroup -->
+
+</s:Module>

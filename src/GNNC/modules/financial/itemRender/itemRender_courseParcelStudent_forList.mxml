@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:ItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+				xmlns:s="library://ns.adobe.com/flex/spark" 
+				xmlns:mx="library://ns.adobe.com/flex/mx" 
+				
+				autoDrawBackground="false" 
+				height="30" width="100%" 
+				
+				mouseDown="{__mDown()}"
+				
+				xmlns:stage="GNNC.elements.stage.*" xmlns:component="GNNC.elements.component.*"
+				
+				>
+	<fx:Script>
+		<![CDATA[
+			import GNNC.data.data.gnncData;
+			import GNNC.data.date.gnncDate;
+			import GNNC.event.gnncEventGeneral;
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.gnncEmbedImage;
+			
+			private function __dispatche(send_:String):void
+			{
+				Object(owner).dispatchEvent(new gnncEventGeneral(send_,data));
+			}
+			
+			private function __fView(event:Event):void
+			{
+				__dispatche(gnncEventGeneral._view);
+			}
+			
+			private function __fAccess(event:Event):void
+			{
+				__dispatche(gnncEventGeneral._update); //ACESSO
+			}
+			
+			private function __selectIndex():void
+			{
+				Object(owner).selectedIndex = itemIndex;
+			}
+			
+			private function __mDown():void
+			{
+				__selectIndex();
+				Object(owner).dispatchEvent(new gnncEventGeneral(gnncEventGeneral._mouseDown,data));
+			}
+			
+			
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="normal" />
+		<s:State name="hovered" />
+		<s:State name="selected" />
+		<s:State name="normalAndShowsCaret"/>
+		<s:State name="hoveredAndShowsCaret"/>
+		<s:State name="selectedAndShowsCaret"/>
+	</s:states>
+	
+	<s:Rect left="0" top="0" right="0" bottom="0" alpha=".2"  includeIn="hoveredAndShowsCaret,hovered">
+		<s:fill>
+			<s:SolidColor color="0xDDDDDD"/>
+		</s:fill>
+	</s:Rect>
+	
+	<elements:elementBarStatus left="0" top="0" right="0" bottom="0" alpha=".5"/>
+	
+	<s:Rect left="0" top="0" right="0" bottom="0" includeIn="selected,selectedAndShowsCaret">
+		<s:fill>
+			<s:LinearGradient rotation="90"> 
+				<s:GradientEntry color="0x3785e2"/>
+				<s:GradientEntry color="0x2170cf"/>
+			</s:LinearGradient>
+		</s:fill>
+	</s:Rect>
+	
+	<s:HGroup gap="1" left="0" top="0" right="0" bottom="0" paddingLeft="5" paddingRight="2" verticalAlign="middle" color.selected="0xFFFFFF" color.selectedAndShowsCaret="0xFFFFFF">
+		<s:Image source="{gnncEmbedBlackWhite.bw_client_16}" toolTip="Aluno" />
+		<s:Image source="{data.ACTIVE_CLIENT==0?gnncEmbedImage.STATUS_RED_16:data.ACTIVE_CLIENT==1?gnncEmbedImage.STATUS_GREEN_16:data.ACTIVE_CLIENT==2?gnncEmbedImage.STATUS_YELLOW_16:gnncEmbedImage.STATUS_GREY_16}" toolTip="{data.ACTIVE_CLIENT==0?'Cadastro Inativo':data.ACTIVE_CLIENT==1?'Cadastro Ativo':data.ACTIVE_CLIENT==2?'Cadastro em Espera':'Cadastro Indefinido'}" width="12" height="12" horizontalCenter="0" verticalCenter="0" smooth="true" />		
+		<s:Label text="{gnncData.__firstLetterUpperCase(data.NAME_STUDENT)}" paddingLeft="4" fontSize="11" fontWeight="bold" maxDisplayedLines="1" showTruncationTip="true" width="100%"/>
+		<s:Label text="{data.ENROLLMENT}" showTruncationTip="true" maxDisplayedLines="1" width="100" toolTip="{'Matrícula: '+data.ENROLLMENT}"/>
+
+		<s:Label text="Matriculado" fontWeight="bold" fontSize="11" paddingLeft="3" paddingRight="3" />
+		<component:con_labelBackgroudColor width="24" height="20" _label="{gnncDataNumber.__setZero(data.ROWS_COURSE_PARCEL)}" _colorBackground="{0x888888}" _colorBackgroundAlpha="1" _color="0xFFFFFF" textAlign="center" toolTip="Mensalidade(s) Gerada(s)" />
+		
+		<s:Image source="{data.ACCESS_WEB=='YES'?gnncEmbedImage.ACCESS_16:gnncEmbedImage.ACCESS_16_BW}" toolTip="{'Acesso Web: '+data.ACCESS_WEB}" />
+		<s:Image source="{gnncEmbedImage.BIRTHDAY_16}" toolTip="{'Aniversário: \n'+gnncDate.__date2Legend(data.DATE_BIRTH,null)+' ('+gnncDate.__age(data.DATE_BIRTH)+')'}" />
+		<s:Rect width="2"/>
+		<s:Button icon="{gnncEmbedBlackWhite.bw_view_16}" width="23" height="25" toolTip="Visualizar Cadastro" click="{__fView(null)}" />
+	</s:HGroup>
+	
+	<elements:elementHLine bottom="0" height="1" alpha=".3" />
+	
+</s:ItemRenderer>

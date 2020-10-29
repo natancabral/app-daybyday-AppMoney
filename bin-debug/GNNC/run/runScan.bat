@@ -1,0 +1,1 @@
+scan\App\NAPS2.Console.exe naps2.console -o %2  -p %1 --enableocr --ocrlang "por" --pdftitle "GNNC DayByDay Document" --pdfauthor "GNNC Estrategia Empresarial" --pdfsubject "www.gnnc.com.br" --pdfkeywords "documents num...1..2..3..4" --force -v

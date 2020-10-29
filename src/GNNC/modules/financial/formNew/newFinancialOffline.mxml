@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  width="400" height="400" 
+		  xmlns:gnncDateField4="GNNC.UI.gnncDateField4.*" 
+		  creationComplete="{__start()}" >
+	<fx:Script>
+		<![CDATA[
+			import mx.events.PropertyChangeEvent;
+			import mx.graphics.SolidColor;
+			import mx.graphics.SolidColorStroke;
+			import mx.rpc.events.ResultEvent;
+			
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.gnncEmbedImage;
+			import GNNC.UI.gnncPopUp.gnncPopUp;
+			import GNNC.data.data.gnncData;
+			import GNNC.data.data.gnncDataNumber;
+			import GNNC.data.date.gnncDate;
+			import GNNC.data.globals.gnncGlobalStatic;
+			import GNNC.data.sql.gnncSql;
+			import GNNC.data.conn.gnncAMFPhp;
+			import GNNC.document.gnncFileSqlLite;
+			import GNNC.sqlTables.table_financial;
+			import GNNC.time.gnncTime;
+			
+
+			//[Bindable] private var _GLOBAL:GLOBAL = new GLOBAL(true);
+			//[Bindable] private var _SQLlite:DAYBYDAY_SQLLITE;
+			[Bindable] private var _SQLlite:gnncFileSqlLite = new gnncFileSqlLite();
+			[Bindable] private var _FINANCIAL:gnncAMFPhp = new gnncAMFPhp();
+
+			private function __start():void
+			{
+				_SQLlite.__connect('appMoney');
+				//_SQLlite.__connect('appMoney');
+				
+				//_SQLlite 	= new DAYBYDAY_SQLLITE(this,"DAYBYDAY_MONEY");
+				//_FINANCIAL 	= new DAYBYDAY_AMFPHP(parentApplication);
+				//new DAYBYDAY_CHANGE_MONITOR().__MONITORING(_GLOBAL,'USERIDGENERAL',function(e:PropertyChangeEvent):void{ __close(); __CONNECTION(); });
+				
+				//VALUE_.setFocus();
+				//VALUE_.drawFocus(true);
+				
+				//focusManager.showFocus();
+				//focusManager.getFocus();
+				//focusManager.activate();
+			}
+			
+			private function __close():void
+			{
+				new gnncPopUp().__close(this);
+			}
+			
+			private function __CONNECTION():void
+			{
+				var _SQL:String = "";
+				var _FR:Function = function(e:ResultEvent):void{ _SQLlite.__query(" DELETE FROM dbd_financial ") };
+				
+				for(var i:uint = 0; i < _SQLlite.DATA_ROWS; i++)
+				{
+					var _TABLE:table_financial 	= new table_financial();
+					_TABLE.NUMBER_LETTER		= 'E';
+					_TABLE.NUMBER				= 0;
+					_TABLE.MIX					= 'FINANCIAL';
+					_TABLE.VALUE_IN				= Number(_SQLlite.DATA_ARR.getItemAt(i).VALUE_IN);
+					_TABLE.VALUE_OUT			= Number(_SQLlite.DATA_ARR.getItemAt(i).VALUE_OUT);
+					_TABLE.DATE_END				= _SQLlite.DATA_ARR.getItemAt(i).DATE_END;
+					_TABLE.DESCRIPTION			= _SQLlite.DATA_ARR.getItemAt(i).DESCRIPTION;
+					_SQL						+= new gnncSql(this).__INSERT(_TABLE)+
+						gnncGlobalStatic._breakSql;
+				}
+				
+				//new DAYBYDAY_ALERT(this)._TEXTAREA(_SQL);
+				_FINANCIAL.__sql(_SQL,'','',_FR);
+			}
+
+			private function __LIST_SAFES():void
+			{
+				
+
+				//__CREATE_DB();
+				VALUE_.text = "";
+				DESCRIPTION_.text = "";
+					
+				__SQLlite("SELECT * from dbd_financial ORDER BY DATE_END");
+			}
+			
+			private function __SQLlite(sql_:String):void
+			{
+				if(sql_ && _SQLlite!=null)
+					_SQLlite.__query(sql_);
+			}
+			
+			private function __SAVE():void
+			{
+				if(Number(VALUE_.text)==0 && !DESCRIPTION_.text)
+					return;
+				
+				//_SQLlite._loading = true;
+				_SQLlite.__clear();
+				
+				gnncData.__scapeText(null,[DESCRIPTION_]);
+				
+				var _TABLE:Object 		= new Object();
+				_TABLE._TABLE			= 'FINANCIAL';
+				_TABLE.MIX				= 'FINANCIAL';
+				_TABLE.VALUE_IN 		= (SAFE_IN_.selected)?Number(Number(VALUE_.text).toFixed(2)):0;
+				_TABLE.VALUE_OUT 		= (SAFE_OUT_.selected)?Number(Number(VALUE_.text).toFixed(2)):0;
+				_TABLE.DESCRIPTION 		= DESCRIPTION_.text;
+				_TABLE.DATE_END 		= gnncDate.__date2String(DATE_END_.selectedDate,false);
+				var sql:String 			= new gnncSql().__INSERT(_TABLE);
+				//new DAYBYDAY_ALERT(this)._TEXTAREA(sql);
+				_SQLlite.__query			(sql);
+				
+				new gnncTime().__start(100,__LIST_SAFES,2);
+			}
+			
+			private function __DEL():void
+			{
+				if(LIST_.selectedIndex>-1)
+				{
+					_SQLlite.__delete('dbd_financial',LIST_.selectedItem.ID);
+					new gnncTime().__start(100,__LIST_SAFES,2);
+				}
+			}
+			
+			private function __CREATE_DB():void
+			{
+				_SQLlite = new gnncFileSqlLite();
+				//_SQLlite.TRY = true;
+				//_SQLlite.GLOBAL_ERROR = true;
+				_SQLlite.__query("CREATE TABLE IF NOT EXISTS dbd_financial ( " +
+					"ID INTEGER PRIMARY KEY AUTOINCREMENT, " +
+					//"ID_CLIENT int(9), " +
+					//"ID_PROJECT int(9), " +
+					//"ID_CONTRACT int(6), " +
+					"ID_FINANCIAL_ACCOUNT int(6), " +
+					//"ID_PRODUCT int(9), " +
+					"MIX varchar(30), " +
+					//"NUMBER_LETTER varchar(1), " +
+					//"NUMBER int(50), " +
+					"DOCUMENT_NUMBER varchar(100), " +
+					"DOCUMENT_TYPE int(2), " +
+					"VALUE_IN double, " +
+					"VALUE_OUT double, " +
+					//"VALUE_IN_PAY double, " +
+					//"VALUE_OUT_PAY double, " +
+					//"PAY_TYPE varchar(6), " +
+					//"DISCOUNT_VALUE double, " +
+					//"DISCOUNT_PERCENT double, " +
+					//"FINE_VALUE double, " +
+					//"FINE_PERCENT double, " +
+					//"FINE_PERCENT_TIME int(3), " +
+					"DESCRIPTION varchar(200), " +
+					//"DATE timestamp default CURRENT_TIMESTAMP, " +
+					//"DATE_START datetime, " +
+					"DATE_END varchar(19), " +
+					"DATE_FINAL varchar(19), " +
+					//"DATE_CANCELED datetime, " +
+					"ID_DEPARTAMENT int(3), " +
+					"ID_GROUP int(3), " +
+					"ID_CATEGORY int(3) " +
+					//"ACTIVE int(1), " +
+					//"VISIBLE int(1) default '1', " +
+					//"CONTROL int(1)" +
+					")");
+				
+				
+				
+			}
+			
+			private function __OPEN():void
+			{
+				//new gnncPopUp(parentApplication).__creation(new newFinancialOffline());
+				AirPlanePanel_.visible = true;
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+	</fx:Declarations>
+	<s:Button label="AirPlane" height="25" fontWeight="bold" click="{__OPEN()}" skinClass="GNNC.skin.button.skin_buttonLink" color="0xFFFFFF"/>
+	<s:Group id="AirPlanePanel_" visible="false"  width="400" height="400" >
+
+		<s:Rect width="100%" height="100%" radiusX="4" radiusY="4">
+			<s:fill>
+				<s:SolidColor color="0xf9f9f9"/>
+			</s:fill>
+		</s:Rect>
+
+		
+	<mx:ViewStack id="panelCenter_" left="10" top="10" right="10" bottom="10" >
+		<s:NavigatorContent width="100%" height="100%" creationPolicy="all">
+			<s:VGroup gap="1" fontSize="11" horizontalCenter="0" verticalCenter="0">
+				<s:Label text="Descrição"/>
+				<s:Button height="30" label="Prosseguir..." icon="{gnncEmbedImage.NEXT_16}" iconPlacement="right" fontWeight="bold" click="{__LIST_SAFES(); panelCenter_.selectedIndex=1}"/>
+			</s:VGroup>
+		</s:NavigatorContent>
+		<s:NavigatorContent width="100%" height="100%" creationPolicy="all">
+			<s:VGroup width="100%" height="100%" gap="1" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+				<s:Group width="100%">
+					<s:Rect width="100%" radiusX="4" radiusY="4" height="30">
+						<s:fill>
+							<s:SolidColor color="0xeeeeee"/>
+						</s:fill>
+					</s:Rect>
+					<s:HGroup width="100%" gap="8" verticalAlign="middle" height="28" fontWeight="bold" paddingLeft="5" paddingRight="5">
+						<s:Image source="{gnncEmbedBlackWhite.bw_financial_16_safe_in}"/>
+						<s:RadioButton id="SAFE_IN_" label="Receita" groupName="SAFE"/>
+						<s:Rect width="10"/>
+						<s:Image source="{gnncEmbedBlackWhite.bw_financial_16_safe_in}"/>
+						<s:RadioButton id="SAFE_OUT_" label="Despesa" groupName="SAFE" selected="true"/>
+					</s:HGroup>
+				</s:Group>
+				<!--LEMENTS:HLINE height="10"/-->
+				<!--s:Rect height="5"/-->
+				<s:HGroup width="100%" gap="3" verticalAlign="middle" height="25" fontWeight="bold" >
+					<s:Label text="Valor" width="60"/>
+					<s:Label text="Descrição" width="100%"/>
+					<s:Label text="Data" width="92"/>
+					<s:Rect width="80"/>
+				</s:HGroup>
+				<s:HGroup width="100%" gap="3" fontSize="11">
+					<s:TextInput id="VALUE_" text="0,00" width="60" height="25" restrict="[0-9][.]" contentBackgroundColor="{SAFE_IN_.selected?0x009900:SAFE_OUT_.selected?0xcc0000:0xFFFFFF}" color="0xFFFFFF" fontSize="12" fontWeight="bold" maxChars="10"
+								 paddingRight="5" paddingLeft="5"
+								 keyUp="{gnncDataNumber.__safeKeyEvent(event,true)}" 
+								 keyDown="{gnncDataNumber.__safeKeyEvent(event,true)}"
+								 />
+					<s:TextInput id="DESCRIPTION_" width="100%" height="25" maxChars="300" contentBackgroundAlpha=".8" borderAlpha=".8" />
+					<gnncDateField4:gnncDateField4 id="DATE_END_" width="92" height="25" yearNavigationEnabled="true" selectedDate="{new Date()}" editable="false" formatString="DD/MM/YYYY" firstDayOfWeek="0" />
+					<s:Button id="BTN_SAVE_" label="Adicionar" width="80" icon="{gnncEmbedBlackWhite.bw_new_16}" fontWeight="bold" height="25" click="{__SAVE()}"/>
+				</s:HGroup>
+				<!--LEMENTS:HLINE height="10"/-->
+				<s:Rect height="10"/>
+				<s:Group width="100%" height="100%" >
+					<s:List id="LIST_" width="100%" height="100%" dataProvider="{_SQLlite.DATA_ARR}" itemRenderer="GNNC.modules.financial.itemRender.itemRender_financialOffLine_forList" horizontalScrollPolicy="off" >
+						<s:layout>
+							<s:VerticalLayout gap="0" rowHeight="25"/>
+						</s:layout>
+					</s:List>
+					<!--LOGIN:PAGE_LOADING width="100%" height="100%" visible="{_SQLlite._loading}"/-->
+				</s:Group>
+				<s:HGroup width="100%" gap="1" verticalAlign="middle" height="25" fontWeight="bold" >
+					<s:Button label="Atualizar" icon="{gnncEmbedBlackWhite.bw_refresh_16}" height="25" click="{__LIST_SAFES()}" width="25"/>
+					<s:Button label="Excluir" icon="{gnncEmbedBlackWhite.bw_delete_16}" height="25" click="{__DEL()}" enabled="{LIST_.selectedIndex>-1}"/>
+					<s:Rect width="100%"/>
+					<s:Button label="Cadastrar" icon="{gnncEmbedBlackWhite.bw_new_16}" fontWeight="bold" height="25" click="{__CONNECTION()}"/>
+					<s:Button label="Fechar" icon="{gnncEmbedBlackWhite.app_close_16_clean}" fontWeight="bold" height="25" click="{__close()}"/>
+				</s:HGroup>
+			</s:VGroup>
+		</s:NavigatorContent>
+	</mx:ViewStack>
+	<s:Button label="Fechar" width="10" height="10" click="{__close()}" right="10" top="10"/>
+
+	</s:Group>
+
+</s:Module>

@@ -1,0 +1,596 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  
+		  creationComplete="{__start()}"
+		  
+		  width="100%" height="100%" 
+		  
+		  xmlns:stage="GNNC.elements.stage.*" 
+		  xmlns:list="GNNC.elements.component.list.*" 
+		  xmlns:component="GNNC.elements.component.*" 
+		  xmlns:select="GNNC.elements.component.select.*" xmlns:gnncDateField4="GNNC.UI.gnncDateField4.*"
+		  
+		  >
+	<fx:Script>
+		<![CDATA[
+			import GNNC.UI.gnncAlert.gnncAlert;
+			import GNNC.UI.gnncPopUp.gnncPopUp;
+			import GNNC.data.data.gnncDataNumber;
+			import GNNC.data.date.DateUtils;
+			import GNNC.data.date.gnncDate;
+			import GNNC.data.globals.gnncGlobalArrays;
+			import GNNC.data.globals.gnncGlobalStatic;
+			import GNNC.data.sql.gnncSql;
+			import GNNC.data.conn.gnncAMFPhp;
+			import GNNC.elements.component.list.conList_financial;
+			import GNNC.event.gnncEventGeneral;
+			import GNNC.gnncEmbedBlackWhite;
+			import GNNC.gnncEmbedExtension;
+			import GNNC.gnncEmbedImage;
+			import GNNC.modules.financial.formNew.newFinancial;
+			import GNNC.modules.financial.formNew.newFinancialOverDraft;
+			import GNNC.modules.financial.report.gnncFileReport_financial_overDraft;
+			import GNNC.sqlTables.table_financial_overdraft;
+			
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+
+			private var _connFinancialOverDraft:gnncAMFPhp = new gnncAMFPhp();
+			
+			private const _today:Date 	= new Date();
+			private var _month:uint 	= new Date().month; 	//JAN --> 0
+			private var _year:uint 		= new Date().fullYear; 	//2012
+
+			private function __start():void
+			{
+				__month(_month,false,_year);
+				__config();
+			}
+
+			private function __config():void
+			{
+				//overDraft_._sqlShow = true;
+				overDraft_._changeEvent = __selectedItem;
+			}
+			
+			private function __selectedItem(e:*):void
+			{
+				if(!overDraft_.selected)
+				{
+					DS_.text = '';
+					return;
+				}
+				
+				DS_.text = overDraft_.selectedItem.DESCRIPTION;
+			}
+
+			private function __financialOverDraftDateFinal():void
+			{
+				overDraft_.__fDateFinal();
+			}
+
+			private function __financialNew():void
+			{
+				if(!overDraft_.selected)
+				{
+					new gnncAlert().__alert('Selecione um cheque na listagem.');
+					return;
+				}
+				
+				overDraft_.__overDraft2Financial();
+				
+				return;
+				
+				var _obj:Object			= overDraft_.selectedItem;
+				
+				var _table:table_financial_overdraft = new table_financial_overdraft();
+				_table.VALUE_IN 		= _obj.VALUE_IN;
+				_table.VALUE_OUT 		= _obj.VALUE_OUT;
+				_table.ID_GROUP			= _obj.ID_GROUP;
+				_table.ID_CLIENT		= _obj.ID_CLIENT;
+				_table.DESCRIPTION		= _obj.DESCRIPTION;
+				_table.KEY_FINANCIAL	= _obj.KEY_FINANCIAL;
+				_table.DOCUMENT_NUMBER 	= _obj.DOCUMENT_NUMBER;
+				_table.DOCUMENT_TYPE 	= _obj.DOCUMENT_TYPE;
+				
+				var f:conList_financial = new conList_financial();
+				f._tableClass 			= _table;
+				
+				f.__pageNew();
+				
+				f.__fNew				(null,__fRemove);
+				
+				function __fRemove(e:*=null):void
+				{
+					if(!f.page['_change'])
+						return;
+
+					if(!overDraft_.selected)
+						return;
+
+					if(gnncDate.__isValid(overDraft_.selectedItem.DATE_FINAL))
+						return;
+
+					var _dNumber:String = _obj.DOCUMENT_NUMBER ;
+					var _text:String 	= _dNumber ? 'número '+_dNumber : '' ;
+					
+					Alert.show('Deseja compensar o cheque '+ _text +' lançado neste momento?','Compensar...',3,null,__closeAlert);
+					
+					function __closeAlert(event:CloseEvent):void
+					{
+						if(event.detail != Alert.YES)
+							return;
+							
+						__financialOverDraftDateFinal();
+						
+					}
+					
+				}
+			}
+
+			private function __financialOverDraftRefresh():void
+			{
+				//return;
+				overDraft_.__select();
+			}
+			
+			private function __financialList(dateFrom_:Date=null,dateTo_:Date=null,searchAdvanced_:Boolean=false):void
+			{
+				//__CLEAR_MULTI_SELECTION();
+				overDraft_.setFocus();
+				
+				var WHERE:Array = new Array();
+				var ORDER:Array = new Array();
+				
+				if(searchAdvanced_)
+				{
+					if(CLIENT_.value)
+						WHERE.push(" ID_CLIENT 				like 	'"+CLIENT_.value+"' ");
+					if(FINANCIAL_IN_.value)
+						WHERE.push(" ID_GROUP 				like 	'"+FINANCIAL_IN_.value+"' ");
+					if(FINANCIAL_OUT_.value)
+						WHERE.push(" ID_GROUP 				like 	'"+FINANCIAL_OUT_.value+"' ");
+					
+					if(WORD_.text)
+					{
+						var W:String = WORD_.text;
+						WHERE.push("(  " +
+							//###################################
+							//###################################
+							//ONLY OVERDRAFT
+							"NAME_CLIENT_DOCUMENT 	like '%"+W+"%' OR " +
+							//###################################
+							//###################################
+							"ID 					like '%"+W+"%' OR " +
+							"NUMBER 				like '%"+W+"%' OR " +
+							"DOCUMENT_NUMBER 		like '%"+W+"%' OR " +
+							"DESCRIPTION 			like '%"+W+"%' OR " +
+							"VALUE_IN 				like '%"+W+"%' OR " +
+							"VALUE_OUT 				like '%"+W+"%' " +
+							") ");
+					}
+				}
+				
+				//DATE FINAL
+				if(CDATE_ALL.selected){
+					//none
+				}else if(CDATE_FINAL_NO.selected){
+					WHERE.push(" DATE_FINAL 	like 	'0000-00-00 00:00:00' ");
+					WHERE.push(" DATE_CANCELED 	like 	'0000-00-00 00:00:00' ");
+				}else if(CDATE_FINAL.selected){
+					WHERE.push(" DATE_FINAL 	<> 		'0000-00-00 00:00:00' ");
+					WHERE.push(" DATE_CANCELED 	like 	'0000-00-00 00:00:00' ");
+				}else if(CDATE_CANCELED.selected){
+					WHERE.push(" DATE_CANCELED 	<> 		'0000-00-00 00:00:00' ");
+					WHERE.push(" DATE_FINAL 	like 	'0000-00-00 00:00:00' ");
+				}
+				
+				//SAFE
+				if(CSAFE_ALL.selected){
+					//none
+				}else if(CSAFE_IN.selected){		
+					WHERE.push(" VALUE_IN > 0 ");
+				}else if(CSAFE_OUT.selected){	
+					WHERE.push(" VALUE_OUT > 0 ");
+				}
+				
+				if(dateFrom_ == null && dateTo_ == null){
+					WHERE.push(" DATE_END >= '"+_year+"-"+gnncDataNumber.__setZero(_month+1)+"-"+gnncDataNumber.__setZero(salesRangeDays_.values[0])+" 00:00:00' AND DATE_END <= '"+_year+"-"+gnncDataNumber.__setZero(_month+1)+"-"+gnncDataNumber.__setZero(salesRangeDays_.values[1])+" 24:00:00' ");
+				}else if(dateFrom_ && dateTo_){
+					WHERE.push(" DATE_END >= '"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+dateFrom_.date+" 00:00:00' AND DATE_END <= '"+dateTo_.fullYear+"-"+gnncDataNumber.__setZero(dateTo_.month+1)+"-"+dateTo_.date+" 24:00:00' ");
+				}else if(dateFrom_){
+					WHERE.push(" DATE_END >= '"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+dateFrom_.date+" 00:00:00' AND DATE_END <= '"+dateFrom_.fullYear+"-"+gnncDataNumber.__setZero(dateFrom_.month+1)+"-"+(dateFrom_.date)+" 23:59:59' ");
+				}
+				
+				//ORDER
+				if(CORDER_ALL.selected){
+					ORDER.push('DATE_END');
+					ORDER.push('DATE_START');
+					ORDER.push('ID');
+				}else if(CORDER_LAST.selected){
+					ORDER.push('ID');
+					CORDERASC_DESC.selected = true; //wtf?
+				}else if(CORDER_REGISTER.selected){
+					ORDER.push('NUMBER_LETTER');
+					ORDER.push('NUMBER');
+				}else if(CORDER_FINAL.selected){
+					ORDER.push('DATE_FINAL');
+					ORDER.push('DATE_CANCELED');
+				}else if(CORDER_VALUE_IN.selected){
+					ORDER.push('VALUE_IN');
+					ORDER.push('VALUE_OUT');
+				}else if(CORDER_VALUE_OUT.selected){
+					ORDER.push('VALUE_OUT');
+					ORDER.push('VALUE_IN');
+				}
+				//ATTACH
+				/*if(CATTACH_ALL.selected){
+				//none
+				}else if(CATTACH_YES.selected){		
+				WHERE.push(" ROWS_ATTACH <> '0' ");
+				}else if(CATTACH_NO.selected){	
+				WHERE.push(" ROWS_ATTACH like '0' ");
+				}*/
+				
+				if(!WHERE.length)
+					WHERE = null;
+				
+				var _columns:Array = 
+					[
+						"*",
+						"(select NAME 		from dbd_client 			where dbd_client.ID 			like ID_CLIENT					) NAME_CLIENT",
+						"(select NAME 		from dbd_departament 		where dbd_departament.ID 		like ID_DEPARTAMENT				) NAME_DEPARTAMENT",
+						"(select NAME 		from dbd_group 				where dbd_group.ID 				like ID_GROUP					) NAME_GROUP",
+						"(select COUNT(ID) 	from dbd_attach 			where dbd_attach.MIX like 'OVERDRAFT' AND dbd_attach.ID_MIX like dbd_financial_overdraft.ID	) as ROWS_ATTACH"
+					];
+				
+				overDraft_.__loading(true);
+				
+				var _sql:String = new gnncSql().__SELECT(new table_financial_overdraft(),false,_columns,null,null,WHERE,null,ORDER,CORDERASC_DESC.selected?true:false);
+				
+				_connFinancialOverDraft.__sql(_sql,'','',__fResult,__fFault);
+				
+				function __fResult(e:*):void
+				{ 
+					overDraft_.dataProvider = _connFinancialOverDraft.DATA_ARR;
+					overDraft_.__loading(false);
+				}
+				
+				function __fFault(e:*):void
+				{ 
+					overDraft_.__loading(false);
+				}
+			}
+
+			private function __financialRefresh():void
+			{
+				//_connFinancialOverDraft.__sqlRefresh();
+				__financialList();
+			}
+			
+			private function __financialToday():void
+			{
+				_year				= _today.fullYear;
+				__month				(_today.month,false,_year);
+				__financialList		(new Date());
+			}
+			
+			private function __month(month_:uint,refresh_:Boolean=false,year_:uint=0):void
+			{
+				salesRangeDays_.values = [1,31];
+				
+				_month			= month_;
+				//MONTH_.label 	= String(ARR._MONTH.getItemAt(_month).label).toUpperCase() + '  ' + year_; //NICK_NAME=OUT
+				//MONTH_.toolTip	= 'Mês de ' + ARR._MONTH.getItemAt(_month).label + ' ' + year_;
+				
+				MONTH_TXT_.text = gnncGlobalArrays._MONTH.getItemAt(month_).NICK_NAME.toString().toUpperCase();
+				YEAR_TXT_.text 	= year_.toString().substr(2,2);
+				
+				if(gnncGlobalStatic._userId && refresh_)
+				{
+					__financialRefresh();
+				}
+			}
+			
+			private function __monthPrev():void
+			{
+				if(_month > 0)
+				{
+					_month--;
+				}
+				else
+				{
+					_month = 11;
+					_year--;
+				}
+				
+				__month(_month,false,_year);
+			}
+			
+			private function __monthNext():void
+			{
+				if(_month < 11)
+				{
+					_month++;
+				}
+				else
+				{
+					_month = 0;
+					_year++;
+				}
+				
+				__month(_month,false,_year);
+			}
+			
+			private function __financialOverDraftNew():void
+			{
+				overDraft_.__fNew(null,__fRemove);
+				
+				function __fRemove(e:*):void
+				{
+					if(!overDraft_.page['_change'])
+						return;
+					
+					__financialList();
+					//overDraft_.__selectKeyFinancial();
+				}
+			}
+			
+			private function __financialOverDraftEdit():void
+			{
+				overDraft_.__fEdit();
+			}
+			
+			private function __financialOverDraftDelete():void
+			{
+				overDraft_.__fDelete();
+			}
+			
+			private function __financialOverDraftView():void
+			{
+				overDraft_.__fView();
+			}
+
+			private function __attachNew():void
+			{
+			}
+			
+			private function __reportPdf():void
+			{
+				new gnncFileReport_financial_overDraft().__createPersonalList(overDraft_.dataProviderArrayC);
+			}
+			
+			private function __financialListNoFinalOld(dateFrom__:Date=null):void
+			{
+				overDraft_.__loading();
+				
+				var WHERE_AND:Array = new Array();
+				var WHERE_OR:Array = new Array();
+				var dateFrom_:Date = (!dateFrom__)?new Date():dateFrom__;
+				
+				//WHERE_OR.push(" (DATE_END >= '"+dateFrom_.fullYear+"-"+(dateFrom_.month+1)+"-"+dateFrom_.date+" 00:00:00' AND DATE_END <= '"+dateFrom_.fullYear+"-"+(dateFrom_.month+1)+"-"+(dateFrom_.date)+" 23:59:59' AND DATE_CANCELED like '0000-00-00 00:00:00') ");
+				WHERE_OR.push(" (DATE_START >= '"+dateFrom_.fullYear+"-"+(dateFrom_.month+1)+"-"+dateFrom_.date+" 00:00:00' AND DATE_START <= '"+dateFrom_.fullYear+"-"+(dateFrom_.month+1)+"-"+(dateFrom_.date)+" 23:59:59' AND DATE_CANCELED like '0000-00-00 00:00:00') ");
+				WHERE_OR.push(" (DATE_FINAL like '0000-00-00 00:00:00' AND DATE_END <= '"+dateFrom_.fullYear+"-"+(dateFrom_.month+1)+"-"+dateFrom_.date+" 23:59:59' AND DATE_START <= '"+dateFrom_.fullYear+"-"+(dateFrom_.month+1)+"-"+(dateFrom_.date)+" 23:59:59' AND DATE_CANCELED like '0000-00-00 00:00:00' AND MIX <> 'FINANCIAL_NOTE') ");
+				
+				var _columns:Array = 
+					[
+						"*",
+						"(select NAME 		from dbd_client 			where dbd_client.ID like ID_CLIENT													) as NAME_CLIENT",
+						"(select NAME 		from dbd_group 				where dbd_group.ID like ID_GROUP													) as NAME_GROUP",
+						"(select NAME 		from dbd_departament 		where dbd_departament.ID like ID_DEPARTAMENT										) as NAME_DEPARTAMENT",
+						"(select NAME 		from dbd_financial_account 	where dbd_financial_account.ID like ID_FINANCIAL_ACCOUNT							) as NAME_FINANCIAL_ACCOUNT",
+						"(select COUNT(ID) 	from dbd_attach 			where dbd_attach.MIX like 'FINANCIAL' AND dbd_attach.ID_MIX like dbd_financial_overdraft.ID	) as ROWS_ATTACH"
+					];
+				
+				var _sql:String = new gnncSql().__SELECT(new table_financial_overdraft(),false,_columns,null,null,null,WHERE_OR,['DATE_END','DATE_START','ID'],false);
+				
+				_connFinancialOverDraft.__sql(_sql,'','',__fResult,__fFault);
+				
+				function __fResult(e:*):void
+				{
+					overDraft_.dataProvider = _connFinancialOverDraft.DATA_ARR;
+					overDraft_.__loading(false);
+				}
+				
+				function __fFault(e:*):void
+				{
+					overDraft_.__loading(false);
+				}
+				
+			}
+
+
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+	</fx:Declarations>
+
+	<elements:elementBarStatus width="201" height="100%"/>
+	<elements:elementBarStatus height="66"/>
+	
+	<s:Scroller height="66" width="100%" verticalScrollPolicy="off" >
+		
+		<s:HGroup gap="2" paddingLeft="3" paddingRight="3" height="66" verticalAlign="middle">
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.bw_financial_32_type_overdraft_new}" 	label="Novo" 				iconPlacement="top"   skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialOverDraftNew()}" 		toolTip="Novo Cheque"/>
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.bw_financial_32_safe_new}" 			label="Lançar" 				iconPlacement="top"   skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialNew()}" 				toolTip="Lançar cheque" />
+			<elements:elementVLine _COLOR="0xeeeeee" width="5" />
+			<s:VGroup gap="1" width="90" height="63">
+				<s:Button width="100%" height="100%" icon="{gnncEmbedBlackWhite.bw_view_16}" 					label="Visualizar" 			iconPlacement="right" skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialOverDraftView()}"/>
+				<s:Button width="100%" height="100%" icon="{gnncEmbedBlackWhite.bw_edit_16}" 					label="Editar" 				iconPlacement="right" skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialOverDraftEdit()}"/>
+			</s:VGroup>
+			<s:VGroup gap="1" width="85" height="63">
+				<s:Button width="100%" height="100%" icon="{gnncEmbedBlackWhite.bw_attach_16_new}" 				label="Arquivo"				iconPlacement="right" skinClass="GNNC.skin.button.skin_buttonLink" click="{__attachNew()}" enabled="false"/>
+				<s:Button width="100%" height="100%" icon="{gnncEmbedBlackWhite.bw_delete_16}" 					label="Excluir" 			iconPlacement="right" skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialOverDraftDelete()}"/>
+			</s:VGroup>
+			<elements:elementVLine _COLOR="0xeeeeee" width="5" />
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.check_32_blue_ok}" 					label="Compensar" 			iconPlacement="top"   skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialOverDraftDateFinal()}" />
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.check_32_red_ok}" 					label="Cancelar" 			iconPlacement="top"   skinClass="GNNC.skin.button.skin_buttonLink" click="{}" enabled="false" />
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.bw_urgent_32}" 						label="Pendente" 			iconPlacement="top" skinClass="GNNC.skin.button.skin_buttonLink" click="{}" toolTip="Marcar lançamento como pendente. Este marcador não altera o funcionamento financeiro." enabled="false" />
+			<s:Rect width="100%"/>
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.bw_calendar_32_today}" 				label="Hoje" 				iconPlacement="top"   skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialToday()}"/>
+			<s:Button width="63" height="100%" icon="{gnncEmbedBlackWhite.bw_calendar_32}" 						label="Mês" 				iconPlacement="top"   skinClass="GNNC.skin.button.skin_buttonLink" click="{__financialList()}"/>
+		</s:HGroup>
+	
+	</s:Scroller>
+
+	<elements:elementHLine top="66" height="1" />
+	
+	<s:HGroup width="100%" top="67" bottom="0" gap="0" >
+		
+		<s:Group width="201" height="100%">
+			<mx:Accordion width="201" height="100%" headerHeight="31" fontSize="11" fontWeight="bold" contentBackgroundAlpha="0" borderVisible="false" openDuration="300" headerStyleName="AC" horizontalGap="0" verticalGap="-1">
+				<s:NavigatorContent label="Home" icon="{gnncEmbedBlackWhite.bw_home_16}" fontWeight="normal" width="100%" height="100%" >
+					<s:Scroller width="100%" height="100%">
+						<s:VGroup width="100%" paddingLeft="10" paddingRight="10" paddingTop="10" paddingBottom="10" gap="1">
+							<s:HGroup width="100%" gap="1">
+								<s:Button height="30" label="Vencidos (0)" icon="{gnncEmbedBlackWhite.check_16_bw}" fontSize="11" width="100%" fontWeight="normal" click="{__financialListNoFinalOld()}" />
+								<s:Button height="30" label="Pendentes (0)" icon="{gnncEmbedBlackWhite.bw_urgent_16}" fontSize="11" width="100%" fontWeight="normal" click="{__financialList()}" enabled="false"/>
+							</s:HGroup>
+							<s:Rect height="10"/>
+							<s:HGroup width="100%" gap="1" horizontalAlign="center" >
+								<s:Button icon="{gnncEmbedImage.PREV_16}" skinClass="GNNC.skin.button.skin_buttonLink" width="18" height="30" click="{__monthPrev()}" toolTip="Mês Anterior"/>
+								<elements:elementLabelFont id="MONTH_TXT_" width="100%" fontSize="30" text="" textAlign="center" paddingTop="5" maxDisplayedLines="1" showTruncationTip="true" />
+								<elements:elementLabelFont id="YEAR_TXT_"  width="80%" fontSize="30" text="" textAlign="center" paddingTop="5" color="0x999999" paddingLeft="0" paddingRight="2" maxDisplayedLines="1" showTruncationTip="true" />
+								<s:Button icon="{gnncEmbedImage.NEXT_16}" skinClass="GNNC.skin.button.skin_buttonLink" width="18" height="30" click="{__monthNext()}" toolTip="Próximo Mês"/>
+							</s:HGroup>
+							<mx:HSlider 
+								id="salesRangeDays_"
+								values="[1,31]"
+								snapInterval="1"
+								width="100%"
+								thumbCount="2"
+								labels="['1','5','10','15','20','25','31']"
+								tickInterval="1" 
+								height="50" minimum="1" maximum="31" enabled="true" />
+							<s:HGroup width="100%"  verticalAlign="middle" gap="1" textAlign="center">
+								<!--s:Button height="30" id="MONTH_" fontSize="11" width="100%" fontWeight="bold" click="{__financialList()}" enabled="false"/-->
+								<s:Button height="30" width="30" icon="{gnncEmbedBlackWhite.bw_calendar_16_today}" click="{__financialToday()}" label="Hoje, somente o dia atual." fontWeight="bold" />
+								<s:HGroup height="30" width="30" gap="0">
+									<s:Button height="30" width="30" icon="{gnncEmbedBlackWhite.bw_calendar_16}" click="{SHOW_CALENDAR_.displayPopUp=!SHOW_CALENDAR_.displayPopUp}" label="Calendário..." fontWeight="bold" />
+									<s:PopUpAnchor id="SHOW_CALENDAR_" popUpPosition="above" width="180" height="180" displayPopUp="false">
+										<mx:DateChooser id="FINANCIAL_CALENDAR_" width="180" height="180" fontSize="11" selectedDate="{new Date()}" showToday="false" borderColor="0xAAAAAA"  
+														change="{__financialList(FINANCIAL_CALENDAR_.selectedDate); SHOW_CALENDAR_.displayPopUp = false;}" rollOut="{SHOW_CALENDAR_.displayPopUp = false}" 
+														borderVisible="true" firstDayOfWeek="0" yearNavigationEnabled="true" />
+									</s:PopUpAnchor>
+								</s:HGroup>
+								<s:Button height="30" label="Pesq. (Mês)" toolTip="Pesquisar (Mês)" icon="{gnncEmbedBlackWhite.bw_search_16}" fontSize="11" width="100%" fontWeight="bold" click="{__financialList()}"/>
+							</s:HGroup> 
+							<elements:elementLabelDropShadow text="CHEQUES" fontSize="13" height="35" fontWeight="normal"/>
+							<s:HGroup width="100%" gap="1">
+								<s:VGroup width="20" gap="6">
+									<s:Image source="{gnncEmbedBlackWhite.bw_all_16}"/>
+									<s:Image source="{gnncEmbedBlackWhite.check_16_bw}"/>
+									<s:Image source="{gnncEmbedBlackWhite.check_16_blue_ok}"/>
+									<s:Image source="{gnncEmbedBlackWhite.check_16_red_ok}"/>
+									<s:Rect height="10"/>
+									<s:Image source="{gnncEmbedBlackWhite.bw_financial_16_safe}"/>
+									<s:Image source="{gnncEmbedBlackWhite.bw_financial_16_safe_in}"/>
+									<s:Image source="{gnncEmbedBlackWhite.bw_financial_16_safe_out}"/>
+								</s:VGroup>
+								<s:VGroup width="100%" gap="6">
+									<s:RadioButton id="CDATE_ALL" 				height="16" groupName="DATE" label="Todos" selected="true"/>
+									<s:RadioButton id="CDATE_FINAL_NO" 			height="16" groupName="DATE" label="Não compensado"/>
+									<s:RadioButton id="CDATE_FINAL" 			height="16" groupName="DATE" label="Compensados"/>
+									<s:RadioButton id="CDATE_CANCELED" 		 	height="16" groupName="DATE" label="Cancelados"/>
+									<s:Rect height="10"/>
+									<s:RadioButton id="CSAFE_ALL" 				height="16" groupName="SAFE" label="Todos" selected="true"/>
+									<s:RadioButton id="CSAFE_IN" 				height="16" groupName="SAFE" label="Receita"/>
+									<s:RadioButton id="CSAFE_OUT" 				height="16" groupName="SAFE" label="Despesa"/>
+								</s:VGroup>
+							</s:HGroup>
+						</s:VGroup>
+					</s:Scroller>
+				</s:NavigatorContent>
+				<s:NavigatorContent label="Ordem" icon="{gnncEmbedBlackWhite.bw_order_16}" fontWeight="normal" width="100%" height="100%" contentBackgroundAlpha="1" >
+					<s:Scroller width="100%" height="100%">
+						<s:VGroup width="100%" paddingLeft="10" paddingTop="10" paddingRight="10" gap="1">
+							<elements:elementLabelDropShadow text="ORDENAR POR" fontSize="13" height="35" fontWeight="normal"/>
+							<s:VGroup width="100%" gap="6">
+								<s:RadioButton id="CORDER_ALL" 					height="16" groupName="ORDER" label="Vencimento (Normal)" selected="true"/>
+								<s:RadioButton id="CORDER_LAST" 				height="16" groupName="ORDER" label="Últimos" toolTip="Últimos" />
+								<s:RadioButton id="CORDER_REGISTER" 			height="16" groupName="ORDER" label="Registro Nº (Grupo)" />
+								<s:RadioButton id="CORDER_FINAL" 				height="16" groupName="ORDER" label="Baixado,Cancelado,..." />
+								<s:RadioButton id="CORDER_VALUE_IN" 			height="16" groupName="ORDER" label="Valor (Receita)" />
+								<s:RadioButton id="CORDER_VALUE_OUT" 			height="16" groupName="ORDER" label="Valor (Despesa)" />
+							</s:VGroup>
+							<s:Rect height="10"/>
+							<elements:elementLabelDropShadow text="EM VALOR" fontSize="13" height="35" fontWeight="normal"/>
+							<s:VGroup width="100%" gap="6">
+								<s:RadioButton id="CORDERASC_ASC" 			height="16" groupName="ORDERASC" label="Crescente (Normal)" selected="true"/>
+								<s:RadioButton id="CORDERASC_DESC" 			height="16" groupName="ORDERASC" label="Decrescente" />
+							</s:VGroup>
+						</s:VGroup>
+					</s:Scroller>
+				</s:NavigatorContent>
+				<s:NavigatorContent label="Avançado" icon="{gnncEmbedBlackWhite.bw_search_16}" fontWeight="normal" width="100%" height="100%" contentBackgroundAlpha="1" >
+					<s:Scroller width="100%" height="100%" horizontalScrollPolicy="off">
+						<s:VGroup width="100%" paddingLeft="10" paddingTop="10" paddingRight="10" paddingBottom="10" gap="1">
+							<s:HGroup width="100%" gap="5" fontWeight="bold" height="16">
+								<s:Label text="De" width="100%"/>	
+								<s:Label text="{'Até ('+DateUtils.dateDiff(DateUtils.DAY_OF_MONTH,DATE_FROM_.selectedDate,DATE_TO_.selectedDate)+' dias)'}" width="100%" maxDisplayedLines="1" showTruncationTip="true"/>	
+							</s:HGroup>
+							<s:HGroup width="100%" height="30" gap="1">
+								<gnncDateField4:gnncDateField4 id="DATE_FROM_" 	height="25" width="100%" yearNavigationEnabled="true" contentBackgroundAlpha="1" editable="false" creationComplete="{DATE_FROM_.selectedDate = gnncDate.__string2Date(_today.fullYear+'-01-01',false)}"/>
+								<gnncDateField4:gnncDateField4 id="DATE_TO_" 	height="25" width="100%" yearNavigationEnabled="true" contentBackgroundAlpha="1" editable="false" creationComplete="{DATE_TO_.selectedDate = gnncDate.__string2Date(_today.fullYear+'-12-31',false)}" />
+							</s:HGroup>
+							<elements:elementHLine height="10" _COLOR="0xDDDDDD"/>
+							<select:conSelect_GROUP id="FINANCIAL_IN_"  _MIX="FINANCIAL_IN"  width="100%" height="25" _ADD="false" enabled="true" _CHANGE_EVENT="{function(e:*):void{ FINANCIAL_OUT_.value = 0} }" prompt="Grupo de Receita..." />
+							<select:conSelect_GROUP id="FINANCIAL_OUT_" _MIX="FINANCIAL_OUT" width="100%" height="25" _ADD="false" enabled="true" _CHANGE_EVENT="{function(e:*):void{ FINANCIAL_IN_.value = 0} }" prompt="Grupo de Despesa..." />
+							<elements:elementHLine height="10"/>
+							<select:conSelect_CLIENT _ADD="false" id="CLIENT_" />
+							<elements:elementHLine height="10"/>
+							<s:Label text="Registro Nº, Nº Documento, ID, etc" width="100%" height="16" verticalAlign="middle" maxDisplayedLines="1" showTruncationTip="true"/>
+							<s:TextInput id="WORD_" width="100%" height="25" enter="{__financialList(DATE_FROM_.selectedDate,DATE_TO_.selectedDate,true)}"/>
+							<elements:elementHLine height="10"/>
+							<s:Button height="30" label="Pesquisa Avançada" icon="{gnncEmbedBlackWhite.bw_search_16}" fontSize="11" width="100%" fontWeight="bold" click="{__financialList(DATE_FROM_.selectedDate,DATE_TO_.selectedDate,true)}" />
+						</s:VGroup>
+					</s:Scroller>
+				</s:NavigatorContent>
+			</mx:Accordion>
+			
+		</s:Group>
+		
+		<elements:elementVLine width="1" />
+		
+		<s:VGroup width="100%" height="100%" gap="0">
+			
+			<s:Group width="100%" height="30">
+				<elements:elementBarStatus />
+				<s:HGroup height="25" left="3" top="3" right="3" gap="1" verticalAlign="middle">
+					<s:Image source="{gnncEmbedBlackWhite.bw_financial_16_type_overdraft}" toolTip="Cheques"/>
+					<elements:elementLabelDropShadow text="CHEQUES" fontWeight="normal" fontSize="11" paddingLeft="5" paddingRight="5"/>
+					<component:con_inputSearch id="filterBy_" _FILTER="true" width="200" _FUNCTION_Event_="{ function(e:Event):void{ overDraft_.__filterBy(filterBy_.text,['NAME_CLIENT','NAME_CLIENT_DOCUMENT','DOCUMENT_NUMBER','NAME_GROUP','DESCRIPTION']) }}" />
+					<s:Rect width="100%"/>
+				</s:HGroup>
+			</s:Group>
+			
+			<elements:elementHLine height="1"/>
+
+			<list:conList_financial_overDraft id="overDraft_" width="100%" height="100%" />
+
+			<elements:elementHLine height="1"/>
+
+			<s:Group width="100%" height="30">
+				<elements:elementBarStatus />
+				<s:HGroup height="25" left="3" top="3" right="3" fontWeight="bold" gap="1" verticalAlign="middle">
+					<s:Label text="Σ" width="20" textAlign="center" />
+					<s:Label id="VI_" text="" textAlign="center" width="90" color="0x009900" fontSize="12" />
+					<s:Label id="VO_" text="" textAlign="center" width="90" color="0xcc0000" fontSize="12"  />
+					<s:Label id="VS_" text="" textAlign="center" width="10" />
+					<s:Label id="VR_" text="" textAlign="center" width="90" fontSize="12"  />
+					<s:Image source="{gnncEmbedBlackWhite.bw_description_16}" toolTip="Descrição"/>
+					<s:Label id="DS_" text="" width="100%" paddingRight="7" paddingLeft="7" showTruncationTip="true" maxDisplayedLines="1" />
+					<s:Button icon="{gnncEmbedBlackWhite.bw_document_16_pdf}" label="Gerar Listagem" click="{__reportPdf()}" />
+				</s:HGroup>
+			</s:Group>
+
+		</s:VGroup>
+		
+	</s:HGroup>
+
+	<!-- elements:elementHLine top="65" _COLOR="0xDDDDDD"/>
+	<stage:UI_hDropShadow top="95" alpha=".5" left="201" right="0"/-->
+
+</s:Module>

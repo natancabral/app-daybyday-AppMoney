@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<fxpProperties abbreviated="false" authoringTool="Flex Builder" compiles="true" parentProject="8d347c5d-4742-457e-b501-116db03b629d" projectUUID="8d347c5d-4742-457e-b501-116db03b629d" pureCatalystProject="false" sdkVersion="4.6.0" uuid="98a0da03-02b3-4d5c-94c6-33928d9f5db6" version="15">
+  <projects/>
+  <src/>
+  <swc>
+    <linked location="sdkPlaceHolder" path="sdkPlaceHolder" position="0" uuid="98a0da03-02b3-4d5c-94c6-33928d9f5db6"/>
+    <linked location="E:/daybyday/projects-flex/flex-daybyday-2014/DAYBYDAY_MONEY/libs" path="/libs" position="1" uuid="98a0da03-02b3-4d5c-94c6-33928d9f5db6"/>
+    <linked location="${DOCUMENTS}/_DAYBYDAY_v1.5_SKINS/bin/_DAYBYDAY_v1.5_SKINS.swc" path="${DOCUMENTS}/_DAYBYDAY_v1.5_SKINS/bin/_DAYBYDAY_v1.5_SKINS.swc" position="2" uuid="98a0da03-02b3-4d5c-94c6-33928d9f5db6"/>
+    <linked location="${DOCUMENTS}/_DAYBYDAY_v1.5_MODULES/bin/_DAYBYDAY_v1.5_MODULES.swc" path="${DOCUMENTS}/_DAYBYDAY_v1.5_MODULES/bin/_DAYBYDAY_v1.5_MODULES.swc" position="3" uuid="98a0da03-02b3-4d5c-94c6-33928d9f5db6"/>
+    <linked location="${DOCUMENTS}/_DAYBYDAY_v1.5_EMBED/bin/_DAYBYDAY_v1.5_EMBED.swc" path="${DOCUMENTS}/_DAYBYDAY_v1.5_EMBED/bin/_DAYBYDAY_v1.5_EMBED.swc" position="4" uuid="98a0da03-02b3-4d5c-94c6-33928d9f5db6"/>
+    <linked location="${DOCUMENTS}/_DAYBYDAY_v1.5_AIR/bin/_DAYBYDAY_v1.5_AIR.swc" path="${DOCUMENTS}/_DAYBYDAY_v1.5_AIR/bin/_DAYBYDAY_v1.5_AIR.swc" position="5" uuid="98a0da03-02b3-4d5c-94c6-33928d9f5db6"/>
+    <linked location="${DOCUMENTS}/_DAYBYDAY_v1.5/bin/_DAYBYDAY_v1.5.swc" path="${DOCUMENTS}/_DAYBYDAY_v1.5/bin/_DAYBYDAY_v1.5.swc" position="6" uuid="98a0da03-02b3-4d5c-94c6-33928d9f5db6"/>
+  </swc>
+  <misc/>
+  <theme/>
+  <mxmlFormattingPrefs groupAttributesByState="true" maxLineWidth="100" mxmlAlignAttributes="true" mxmlAttributeOrder="id,userLabel,includeIn,excludeFrom,visible,x,y,z,left,right,top,bottom,width,height,minWidth,minHeight,maxWidth,maxHeight,label" mxmlKeepAttributeValuesOrganized="true"/>
+</fxpProperties>
