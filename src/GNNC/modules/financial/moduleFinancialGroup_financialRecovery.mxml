@@ -585,10 +585,10 @@
 				
 				//server gmail
 				send.setConnectionGMail();
-				send.reply    = 'daybyday.apps@gnnc.com.br';
-				send.email    = 'daybyday.apps@gnnc.com.br';
-				send.user     = 'daybyday.apps@gnnc.com.br';
-				send.password = 'Zm6qKZLzKmsg4mNfAGVk';
+				send.reply    = '';
+				send.email    = '';
+				send.user     = '';
+				send.password = '';
 				send.crypt    = false;
 				
 				if(setSettingSend_.selected){
@@ -605,10 +605,10 @@
 				/*
 				//server gnnc
 				send.setConnectionGNNCServer();
-				send.email    = 'daybyday.apps.server@gnnc.com.br';
-				send.reply    = 'daybyday.apps.server@gnnc.com.br';
-				send.user     = 'daybyday.apps.server@gnnc.com.br';
-				send.password = 'Zm6qKZLzKmsg4mNfAGVk';
+				send.email    = '';
+				send.reply    = '';
+				send.user     = '';
+				send.password = '';
 				send.crypt    = false;
 				*/
 				
